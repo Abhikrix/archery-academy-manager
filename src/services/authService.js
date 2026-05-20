@@ -50,7 +50,7 @@ async function createDefaultUserProfile(userRef, user) {
     uid: user.uid,
     name: user.displayName || user.email || "Academy user",
     email: user.email || "",
-    role: ROLES.ADMIN,
+    role: ROLES.STUDENT,
     createdAt: serverTimestamp(),
   };
 

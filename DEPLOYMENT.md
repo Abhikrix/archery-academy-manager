@@ -55,9 +55,10 @@ After changing any `VITE_*` variable in Vercel, redeploy the app. Vite embeds th
 firebase deploy --only firestore:rules
 ```
 
-5. Confirm the first Admin user can sign in. First-login profiles default to Admin in this app.
-6. Use the Admin Users screen to assign Coach and Student roles.
-7. For Student users, set `studentId` to the matching document ID in the `students` collection.
+5. Sign in once with the first production admin account so `users/{uid}` is created.
+6. In Firebase Console, update that `users/{uid}` document to `role: "admin"`.
+7. Use the Admin Users screen to assign Coach and Student roles after the first admin is active.
+8. For Student users, set `studentId` to the matching document ID in the `students` collection.
 
 ## Local Production Check
 

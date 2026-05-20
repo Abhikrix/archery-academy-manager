@@ -22,24 +22,46 @@ service cloud.firestore {
       return role in ['admin', 'coach', 'student'];
     }
 
-    function hasRole(role) {
-      return hasUserProfile() && currentUserProfile().role == role;
+    function isAdmin() {
+      return hasUserProfile() && currentUserProfile().role == 'admin';
+    }
+
+    function isCoach() {
+      return hasUserProfile() && currentUserProfile().role == 'coach';
+    }
+
+    function isStudent() {
+      return hasUserProfile() && currentUserProfile().role == 'student';
+    }
+
+    function isStaff() {
+      return isAdmin() || isCoach();
+    }
+
+    function linkedStudentId() {
+      return currentUserProfile().keys().hasAny(['studentId'])
+        ? currentUserProfile().studentId
+        : request.auth.uid;
     }
 
     function isOwnStudentRecord(studentId) {
-      return hasRole('student')
-        && (
-          request.auth.uid == studentId
-          || (
-            currentUserProfile().keys().hasAny(['studentId'])
-            && currentUserProfile().studentId == studentId
-          )
-        );
+      return isStudent() && linkedStudentId() == studentId;
+    }
+
+    function studentExists(studentId) {
+      return exists(/databases/$(database)/documents/students/$(studentId));
     }
 
     function validUserProfile(userId) {
       return request.resource.data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'role', 'createdAt', 'studentId'])
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'name',
+          'email',
+          'role',
+          'createdAt',
+          'studentId'
+        ])
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.email is string
@@ -47,17 +69,87 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && (
           !request.resource.data.keys().hasAny(['studentId'])
-          || request.resource.data.studentId is string
+          || (
+            request.resource.data.role == 'student'
+            && request.resource.data.studentId is string
+          )
         );
     }
 
-    function validAttendanceRecord() {
-      return request.resource.data.studentId is string
-        && request.resource.data.date is string
-        && request.resource.data.status in ['present', 'absent'];
+    function validStudentRecord(studentId) {
+      return request.resource.data.keys().hasAll([
+          'id',
+          'name',
+          'parentName',
+          'parentPhoneNumber',
+          'studentPhoneNumber',
+          'batchId',
+          'feeAmount',
+          'joinDate',
+          'feeStatus',
+          'attendanceStatus',
+          'attendanceRate',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'name',
+          'parentName',
+          'parentPhoneNumber',
+          'studentPhoneNumber',
+          'batchId',
+          'feeAmount',
+          'joinDate',
+          'feeStatus',
+          'attendanceStatus',
+          'attendanceRate',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.id == studentId
+        && request.resource.data.name is string
+        && request.resource.data.parentName is string
+        && request.resource.data.parentPhoneNumber is string
+        && request.resource.data.studentPhoneNumber is string
+        && request.resource.data.batchId is string
+        && request.resource.data.feeAmount is number
+        && request.resource.data.feeAmount >= 0
+        && request.resource.data.joinDate is string
+        && request.resource.data.feeStatus in ['paid', 'pending']
+        && request.resource.data.attendanceStatus in ['present', 'absent']
+        && request.resource.data.attendanceRate is number
+        && request.resource.data.attendanceRate >= 0
+        && request.resource.data.attendanceRate <= 100
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
     }
 
-    function validFeeRecord() {
+    function validAttendanceRecord(recordId) {
+      return request.resource.data.keys().hasAll([
+          'studentId',
+          'date',
+          'status',
+          'markedAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'studentId',
+          'date',
+          'status',
+          'markedAt',
+          'updatedAt'
+        ])
+        && request.resource.data.studentId is string
+        && request.resource.data.date is string
+        && request.resource.data.status in ['present', 'absent']
+        && request.resource.data.markedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && recordId == request.resource.data.studentId + '_' + request.resource.data.date
+        && studentExists(request.resource.data.studentId);
+    }
+
+    function validFeeRecord(recordId) {
       return request.resource.data.keys().hasAll([
           'studentId',
           'studentName',
@@ -82,9 +174,7 @@ service cloud.firestore {
           'paymentDate',
           'notes',
           'updatedBy',
-          'timestamp',
-          'createdAt',
-          'updatedAt'
+          'timestamp'
         ])
         && request.resource.data.studentId is string
         && request.resource.data.studentName is string
@@ -92,17 +182,26 @@ service cloud.firestore {
         && request.resource.data.amount is number
         && request.resource.data.amountPaid is number
         && request.resource.data.dueAmount is number
+        && request.resource.data.amount >= 0
+        && request.resource.data.amountPaid >= 0
+        && request.resource.data.amountPaid <= request.resource.data.amount
+        && request.resource.data.dueAmount == request.resource.data.amount - request.resource.data.amountPaid
         && request.resource.data.status in ['paid', 'pending']
+        && (
+          (request.resource.data.status == 'paid' && request.resource.data.dueAmount == 0)
+          || (request.resource.data.status == 'pending' && request.resource.data.dueAmount > 0)
+        )
         && request.resource.data.paymentDate is string
         && request.resource.data.notes is string
         && request.resource.data.updatedBy is string
         && request.resource.data.timestamp == request.time
-        && request.resource.data.amountPaid >= 0
-        && request.resource.data.dueAmount >= 0;
+        && recordId == request.resource.data.studentId + '_' + request.resource.data.month
+        && studentExists(request.resource.data.studentId);
     }
 
     match /users/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || hasRole('admin'));
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+
       allow create: if signedIn()
         && validUserProfile(userId)
         && request.resource.data.createdAt == request.time
@@ -110,37 +209,64 @@ service cloud.firestore {
           (
             request.auth.uid == userId
             && request.resource.data.email == request.auth.token.email
-            && request.resource.data.role == 'admin'
+            && request.resource.data.role == 'student'
           )
-          || hasRole('admin')
+          || isAdmin()
         );
-      allow update: if hasRole('admin')
+
+      allow update: if isAdmin()
         && validUserProfile(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
         && (request.auth.uid != userId || request.resource.data.role == 'admin');
-      allow delete: if hasRole('admin') && request.auth.uid != userId;
+
+      allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
     match /students/{studentId} {
-      allow read: if hasRole('admin') || hasRole('coach') || isOwnStudentRecord(studentId);
-      allow create, update, delete: if hasRole('admin');
+      allow read: if isAdmin() || isCoach() || isOwnStudentRecord(studentId);
+
+      allow create: if isAdmin()
+        && validStudentRecord(studentId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isAdmin()
+        && validStudentRecord(studentId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isAdmin();
     }
 
     match /attendance/{recordId} {
-      allow read: if hasRole('admin')
-        || hasRole('coach')
-        || isOwnStudentRecord(resource.data.studentId);
-      allow create, update: if (hasRole('admin') || hasRole('coach')) && validAttendanceRecord();
-      allow delete: if hasRole('admin') || hasRole('coach');
+      allow read: if isStaff() || isOwnStudentRecord(resource.data.studentId);
+
+      allow create: if isStaff() && validAttendanceRecord(recordId);
+
+      allow update: if isStaff()
+        && validAttendanceRecord(recordId)
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.date == resource.data.date;
+
+      allow delete: if isAdmin();
     }
 
     match /fees/{recordId} {
-      allow read: if hasRole('admin')
-        || hasRole('coach')
-        || isOwnStudentRecord(resource.data.studentId);
-      allow create, update: if (hasRole('admin') || hasRole('coach')) && validFeeRecord();
-      allow delete: if hasRole('admin') || hasRole('coach');
+      allow read: if isStaff() || isOwnStudentRecord(resource.data.studentId);
+
+      allow create: if isStaff() && validFeeRecord(recordId);
+
+      allow update: if isStaff()
+        && validFeeRecord(recordId)
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.month == resource.data.month;
+
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

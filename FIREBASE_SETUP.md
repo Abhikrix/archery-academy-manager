@@ -11,12 +11,12 @@ Auto-created profile:
   "uid": "firebase-auth-uid",
   "name": "Academy user",
   "email": "user@example.com",
-  "role": "admin",
+  "role": "student",
   "createdAt": "server timestamp"
 }
 ```
 
-Default first-login role is currently `admin`.
+Default first-login role is `student` so new accounts do not receive elevated access.
 
 Admins can later edit user profiles in the app's Users screen or directly in Firestore:
 
@@ -120,3 +120,7 @@ represents one student for one month, using `{studentId}_{month}` as the documen
 Student accounts can use `studentId` to link the user profile to one document in the `students`
 collection; if it is omitted, the student portal falls back to the Firebase Auth UID as the
 student document ID.
+
+For the first production admin, create or update `users/{uid}` manually in Firebase Console with
+`role: "admin"` after that user signs in once. After that, use the app's Users screen to manage
+roles.
