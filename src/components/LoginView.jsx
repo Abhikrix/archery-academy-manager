@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import heroImage from "../assets/login-hero.jpg";
 import { useAuth } from "../context/AuthContext";
 import { getRoleHomePath } from "../utils/roleRoutes";
+import ThemeToggle from "./ThemeToggle";
 
 export default function LoginView() {
   const { authError, isFirebaseConfigured, loading, login, profile } = useAuth();
@@ -31,7 +32,7 @@ export default function LoginView() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black">
+    <div className="login-view relative min-h-screen overflow-hidden bg-black">
       <img
         src={heroImage}
         alt=""
@@ -39,7 +40,11 @@ export default function LoginView() {
         fetchPriority="high"
         className="absolute inset-0 h-full w-full object-cover object-center"
       />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.88)_38%,rgba(0,0,0,0.52)_68%,rgba(0,0,0,0.78)_100%)]" />
+      <div className="login-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.88)_38%,rgba(0,0,0,0.52)_68%,rgba(0,0,0,0.78)_100%)]" />
+
+      <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6">
+        <ThemeToggle compact />
+      </div>
 
       <div className="relative flex min-h-screen items-center px-4 py-6 sm:px-6 lg:px-10">
         <section className="w-full max-w-md">

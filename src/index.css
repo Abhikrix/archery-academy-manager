@@ -2,15 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
+:root,
+html[data-theme="dark"] {
+  --academy-black: 9 9 9;
+  --academy-charcoal: 17 17 17;
+  --academy-panel: 23 23 23;
+  --academy-line: 42 36 24;
+  --academy-gold: 212 175 55;
+  --academy-gold-soft: 244 215 122;
+  --academy-ash: 163 163 163;
+  --app-background:
+    radial-gradient(circle at top left, rgba(212, 175, 55, 0.09), transparent 24rem),
+    linear-gradient(180deg, #090909 0%, #0d0d0d 100%);
+  --app-text: #f5f5f5;
+  --surface-bg: rgba(23, 23, 23, 0.95);
+  --surface-border: #2a2418;
+  --surface-soft: rgba(255, 255, 255, 0.04);
+  --field-bg: rgba(0, 0, 0, 0.3);
+  --field-text: #ffffff;
+  --field-placeholder: #737373;
+  --button-bg: rgba(255, 255, 255, 0.03);
+  --button-border: rgba(255, 255, 255, 0.1);
+  --button-text: #e5e5e5;
+  --muted-text: #a3a3a3;
+  --soft-text: #d4d4d4;
+  --subtle-text: #737373;
+  --nav-bg: rgba(0, 0, 0, 0.72);
+  --shadow-glow: 0 0 0 1px rgba(212, 175, 55, 0.12), 0 18px 48px rgba(0, 0, 0, 0.35);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  background: #090909;
-  color: #f5f5f5;
+  color-scheme: dark;
+  background: rgb(var(--academy-black));
+  color: var(--app-text);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+html[data-theme="light"] {
+  --academy-black: 247 248 251;
+  --academy-charcoal: 255 255 255;
+  --academy-panel: 255 255 255;
+  --academy-line: 228 220 198;
+  --academy-ash: 82 82 91;
+  --app-background:
+    radial-gradient(circle at top left, rgba(212, 175, 55, 0.18), transparent 24rem),
+    linear-gradient(180deg, #fbfbfd 0%, #eef1f6 100%);
+  --app-text: #171717;
+  --surface-bg: rgba(255, 255, 255, 0.96);
+  --surface-border: rgba(135, 108, 32, 0.22);
+  --surface-soft: rgba(17, 24, 39, 0.045);
+  --field-bg: rgba(255, 255, 255, 0.92);
+  --field-text: #171717;
+  --field-placeholder: #8b8f98;
+  --button-bg: rgba(255, 255, 255, 0.82);
+  --button-border: rgba(135, 108, 32, 0.2);
+  --button-text: #27272a;
+  --muted-text: #5f636d;
+  --soft-text: #3f3f46;
+  --subtle-text: #7b808a;
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --shadow-glow: 0 0 0 1px rgba(135, 108, 32, 0.1), 0 18px 42px rgba(15, 23, 42, 0.08);
+  color-scheme: light;
 }
 
 * {
@@ -18,42 +71,247 @@
 }
 
 html {
-  background: #090909;
+  background: rgb(var(--academy-black));
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(212, 175, 55, 0.09), transparent 24rem),
-    linear-gradient(180deg, #090909 0%, #0d0d0d 100%);
+  background: var(--app-background);
+  color: var(--app-text);
+}
+
+#root {
+  min-height: 100vh;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  header,
+  aside,
+  nav,
+  main,
+  .surface,
+  .field,
+  .ghost-button,
+  .gold-button,
+  .theme-toggle {
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease,
+      opacity 180ms ease;
+  }
 }
 
 @layer components {
   .surface {
-    @apply rounded-lg border border-academy-line bg-academy-panel/95 shadow-glow;
+    border: 1px solid var(--surface-border);
+    border-radius: 0.5rem;
+    background: var(--surface-bg);
+    box-shadow: var(--shadow-glow);
   }
 
   .section-title {
-    @apply text-sm font-medium uppercase tracking-[0.18em] text-academy-goldSoft/80;
+    color: rgb(var(--academy-gold));
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
   }
 
   .field {
-    @apply h-11 rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-academy-gold focus:ring-2 focus:ring-academy-gold/20;
+    height: 2.75rem;
+    border: 1px solid var(--button-border);
+    border-radius: 0.5rem;
+    background: var(--field-bg);
+    color: var(--field-text);
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.875rem;
+    outline: none;
+  }
+
+  .field::placeholder {
+    color: var(--field-placeholder);
+  }
+
+  .field:focus {
+    border-color: rgb(var(--academy-gold));
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
   }
 
   .ghost-button {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-sm font-medium text-neutral-200 transition hover:border-academy-gold/60 hover:text-white;
+    display: inline-flex;
+    height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--button-border);
+    border-radius: 0.5rem;
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .ghost-button:hover {
+    border-color: rgba(212, 175, 55, 0.6);
+    color: var(--app-text);
   }
 
   .gold-button {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-academy-gold px-3 text-sm font-semibold text-black transition hover:bg-academy-goldSoft;
+    display: inline-flex;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    background: rgb(var(--academy-gold));
+    color: #090909;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
   }
+
+  .gold-button:hover {
+    background: rgb(var(--academy-gold-soft));
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.625rem;
+    border: 1px solid var(--button-border);
+    border-radius: 0.5rem;
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 0.35rem 0.75rem;
+    text-align: left;
+  }
+
+  .theme-toggle:hover {
+    border-color: rgba(212, 175, 55, 0.6);
+    color: var(--app-text);
+  }
+
+  .theme-toggle-compact {
+    width: 2.5rem;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .theme-toggle-icon {
+    display: inline-flex;
+    height: 1.75rem;
+    width: 1.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    background: rgba(212, 175, 55, 0.12);
+    color: rgb(var(--academy-gold));
+  }
+}
+
+html[data-theme="light"] .login-view {
+  background: #f7f8fb !important;
+}
+
+html[data-theme="light"] .login-view img {
+  filter: saturate(0.9) contrast(0.95);
+  opacity: 0.34;
+}
+
+html[data-theme="light"] .login-overlay {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(255, 255, 255, 0.9) 42%,
+    rgba(255, 255, 255, 0.62) 72%,
+    rgba(255, 255, 255, 0.84) 100%
+  ) !important;
+}
+
+html[data-theme="light"] .bg-black,
+html[data-theme="light"] .bg-black\/45,
+html[data-theme="light"] .bg-black\/60,
+html[data-theme="light"] .bg-black\/95 {
+  background-color: var(--nav-bg) !important;
+}
+
+html[data-theme="light"] .bg-black\/20,
+html[data-theme="light"] .bg-black\/30,
+html[data-theme="light"] .bg-white\/\[0\.03\],
+html[data-theme="light"] .bg-white\/\[0\.04\] {
+  background-color: var(--surface-soft) !important;
+}
+
+html[data-theme="light"] .text-white {
+  color: #18181b !important;
+}
+
+html[data-theme="light"] .text-neutral-200 {
+  color: #3f3f46 !important;
+}
+
+html[data-theme="light"] .text-neutral-300 {
+  color: #52525b !important;
+}
+
+html[data-theme="light"] .text-neutral-400 {
+  color: #656a75 !important;
+}
+
+html[data-theme="light"] .text-neutral-500 {
+  color: #858b96 !important;
+}
+
+html[data-theme="light"] .text-amber-100,
+html[data-theme="light"] .text-amber-200 {
+  color: #92400e !important;
+}
+
+html[data-theme="light"] .text-emerald-100,
+html[data-theme="light"] .text-emerald-200 {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] .text-rose-100,
+html[data-theme="light"] .text-rose-200 {
+  color: #be123c !important;
+}
+
+html[data-theme="light"] .text-sky-200 {
+  color: #0369a1 !important;
+}
+
+html[data-theme="light"] .border-white\/5,
+html[data-theme="light"] .border-white\/10 {
+  border-color: rgba(135, 108, 32, 0.18) !important;
+}
+
+html[data-theme="light"] .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(135, 108, 32, 0.14) !important;
+}
+
+html[data-theme="light"] .hover\:bg-white\/\[0\.04\]:hover {
+  background-color: rgba(17, 24, 39, 0.06) !important;
+}
+
+html[data-theme="light"] .hover\:text-white:hover {
+  color: #18181b !important;
 }

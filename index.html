@@ -9,6 +9,22 @@
     />
     <meta name="theme-color" content="#090909" />
     <title>ARCOS ARCHERY ACADEMY Manager</title>
+    <script>
+      (() => {
+        let storedTheme = "dark";
+        try {
+          storedTheme = localStorage.getItem("arcos-theme");
+        } catch {
+          storedTheme = "dark";
+        }
+        const theme = storedTheme === "light" ? "light" : "dark";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", theme === "light" ? "#f7f8fb" : "#090909");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

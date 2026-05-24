@@ -15,6 +15,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import RoleBadge from "./RoleBadge";
+import ThemeToggle from "./ThemeToggle";
 
 const iconMap = {
   dashboard: BarChart3,
@@ -51,15 +52,18 @@ export default function AppShell({
               <RoleBadge role={shellUser.role} />
             </div>
           </div>
-          <button
-            type="button"
-            className="ghost-button px-3"
-            aria-label="Sign out"
-            title="Sign out"
-            onClick={onLogout}
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle compact />
+            <button
+              type="button"
+              className="ghost-button px-3"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={onLogout}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -97,10 +101,13 @@ export default function AppShell({
             })}
           </nav>
 
-          <button type="button" className="ghost-button mt-auto justify-start" onClick={onLogout}>
-            <LogOut size={16} />
-            Sign out
-          </button>
+          <div className="mt-auto space-y-3">
+            <ThemeToggle className="w-full justify-start" />
+            <button type="button" className="ghost-button w-full justify-start" onClick={onLogout}>
+              <LogOut size={16} />
+              Sign out
+            </button>
+          </div>
         </aside>
 
         <main className="min-w-0 px-4 pb-28 pt-5 sm:px-6 md:px-8 md:pb-8">{children}</main>

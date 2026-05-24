@@ -5,17 +5,17 @@ export default {
     extend: {
       colors: {
         academy: {
-          black: "#090909",
-          charcoal: "#111111",
-          panel: "#171717",
-          line: "#2a2418",
-          gold: "#d4af37",
-          goldSoft: "#f4d77a",
-          ash: "#a3a3a3",
+          black: "rgb(var(--academy-black) / <alpha-value>)",
+          charcoal: "rgb(var(--academy-charcoal) / <alpha-value>)",
+          panel: "rgb(var(--academy-panel) / <alpha-value>)",
+          line: "rgb(var(--academy-line) / <alpha-value>)",
+          gold: "rgb(var(--academy-gold) / <alpha-value>)",
+          goldSoft: "rgb(var(--academy-gold-soft) / <alpha-value>)",
+          ash: "rgb(var(--academy-ash) / <alpha-value>)",
         },
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(212, 175, 55, 0.12), 0 18px 48px rgba(0, 0, 0, 0.35)",
+        glow: "var(--shadow-glow)",
       },
     },
   },
