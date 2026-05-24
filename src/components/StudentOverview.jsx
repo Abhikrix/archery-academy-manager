@@ -358,7 +358,6 @@ function FeesPage({ data }) {
       <StudentPageHeader
         eyebrow="Fees"
         title="Fee status"
-        helper="Review monthly fee records, pending dues, and payment status."
       />
 
       <section className="grid gap-3 sm:grid-cols-3">
@@ -526,7 +525,6 @@ function AnnouncementsPage({ announcementError, announcements }) {
       <StudentPageHeader
         eyebrow="Announcements"
         title="Academy updates"
-        helper="Pinned notices and category-based updates from the academy."
       />
 
       {announcementError && (
