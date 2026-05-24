@@ -139,8 +139,6 @@ textarea {
     padding-right: 0.75rem;
     font-size: 0.875rem;
     outline: none;
-    transition: border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease;
-    will-change: transform, border-color, box-shadow;
   }
 
   .field::placeholder {
@@ -149,8 +147,7 @@ textarea {
 
   .field:focus {
     border-color: rgb(var(--academy-gold));
-    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25), 0 0 16px rgba(212, 175, 55, 0.4);
-    transform: scale(1.015);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
   }
 
   .ghost-button {
@@ -186,18 +183,10 @@ textarea {
     padding-right: 0.75rem;
     font-size: 0.875rem;
     font-weight: 600;
-    transition: background-color 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, box-shadow;
   }
 
   .gold-button:hover {
     background: rgb(var(--academy-gold-soft));
-    box-shadow: 0 0 20px rgba(212, 175, 55, 0.65), 0 0 40px rgba(212, 175, 55, 0.3);
-    transform: translateY(-2px) scale(1.01);
-  }
-
-  .gold-button:active {
-    transform: translateY(1px) scale(0.975);
   }
 
   .theme-toggle {
@@ -330,49 +319,4 @@ html[data-theme="light"] .hover\:bg-white\/\[0\.04\]:hover {
 
 html[data-theme="light"] .hover\:text-white:hover {
   color: #18181b !important;
-}
-
-/* Custom Cinematic Load & Floating Animations */
-@keyframes cinematicZoom {
-  0% {
-    transform: scale(1.06);
-    filter: brightness(0.88);
-  }
-  100% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-}
-
-@keyframes fadeInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes subtleFloat {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-.animate-cinematic-zoom {
-  animation: cinematicZoom 12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, filter;
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-float {
-  animation: subtleFloat 8s ease-in-out infinite;
 }
