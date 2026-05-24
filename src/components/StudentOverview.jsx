@@ -302,7 +302,6 @@ function AttendancePage({ data }) {
       <StudentPageHeader
         eyebrow="Attendance"
         title="Attendance history"
-        helper="Track present and absent records in a phone-friendly calendar list."
       />
 
       <section className="surface flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:justify-between">
