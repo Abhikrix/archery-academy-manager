@@ -222,8 +222,8 @@ export default function StudentOverview({
         />
         <DashboardCard
           icon={CalendarDays}
-          label="Join date"
-          value={formatDate(student.joinDate)}
+          label="Date of birth"
+          value={formatDate(student.dateOfBirth || student.joinDate)}
           helper={`Today: ${
             todayStatus === "present" ? "Present" : todayStatus === "absent" ? "Absent" : "Not marked"
           }`}
@@ -252,8 +252,10 @@ export default function StudentOverview({
             <dd className="mt-1 text-white">{batch?.name || "Not assigned"}</dd>
           </div>
           <div>
-            <dt className="text-sm text-neutral-500">Join date</dt>
-            <dd className="mt-1 text-white">{formatDate(student.joinDate)}</dd>
+            <dt className="text-sm text-neutral-500">Date of birth</dt>
+            <dd className="mt-1 text-white">
+              {formatDate(student.dateOfBirth || student.joinDate)}
+            </dd>
           </div>
           <div>
             <dt className="text-sm text-neutral-500">Student phone</dt>

@@ -89,6 +89,7 @@ service cloud.firestore {
           'monthlyFee',
           'pendingFees',
           'feeAmount',
+          'dateOfBirth',
           'joinDate',
           'feeStatus',
           'attendanceStatus',
@@ -110,6 +111,7 @@ service cloud.firestore {
           'monthlyFee',
           'pendingFees',
           'feeAmount',
+          'dateOfBirth',
           'joinDate',
           'feeStatus',
           'attendanceStatus',
@@ -137,7 +139,9 @@ service cloud.firestore {
         && request.resource.data.pendingFees >= 0
         && request.resource.data.parentPhone == request.resource.data.parentPhoneNumber
         && request.resource.data.studentPhone == request.resource.data.studentPhoneNumber
+        && request.resource.data.dateOfBirth is string
         && request.resource.data.joinDate is string
+        && request.resource.data.joinDate == request.resource.data.dateOfBirth
         && request.resource.data.feeStatus in ['paid', 'pending']
         && request.resource.data.attendanceStatus in ['present', 'absent']
         && request.resource.data.attendanceRate is number

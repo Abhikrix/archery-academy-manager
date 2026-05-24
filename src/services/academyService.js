@@ -19,6 +19,7 @@ const defaultStudentValues = {
   parentPhoneNumber: "",
   studentPhone: "",
   studentPhoneNumber: "",
+  dateOfBirth: "",
   joinDate: "",
   feeStatus: "pending",
   monthlyFee: 0,
@@ -259,6 +260,7 @@ export function createStudentRecord(student) {
     student.studentPhone || student.studentPhoneNumber || student.phoneNumber || "",
   ).trim();
   const batchId = student.batchId || student.batch || batches[0]?.id || "";
+  const dateOfBirth = String(student.dateOfBirth || student.joinDate || "").trim();
 
   return {
     ...defaultStudentValues,
@@ -276,7 +278,8 @@ export function createStudentRecord(student) {
     feeAmount,
     monthlyFee: Number(student.monthlyFee ?? feeAmount),
     pendingFees: Number(student.pendingFees ?? 0),
-    joinDate: student.joinDate || "",
+    dateOfBirth,
+    joinDate: dateOfBirth,
   };
 }
 
@@ -487,6 +490,10 @@ export async function saveStudentRecord(student) {
 
   if (!normalizedStudent.name) {
     throw new Error("Student name is required.");
+  }
+
+  if (!normalizedStudent.dateOfBirth) {
+    throw new Error("Date of birth is required.");
   }
 
   const studentRef = doc(db, "students", normalizedStudent.id);

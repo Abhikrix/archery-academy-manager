@@ -228,7 +228,7 @@ export async function createStudentAccount(account) {
     parentName: String(account.parentName || "").trim(),
     parentPhone: String(account.parentPhone || account.parentPhoneNumber || "").trim(),
     studentPhone: String(account.studentPhone || account.studentPhoneNumber || "").trim(),
-    joinDate: String(account.joinDate || "").trim(),
+    dateOfBirth: String(account.dateOfBirth || account.joinDate || "").trim(),
     monthlyFee: Number(account.monthlyFee ?? account.feeAmount ?? 0),
     pendingFees: Number(account.pendingFees ?? 0),
     feeStatus: account.feeStatus === "paid" ? "paid" : "pending",
@@ -248,6 +248,10 @@ export async function createStudentAccount(account) {
 
   if (!normalizedAccount.batchId) {
     throw new Error("Batch is required.");
+  }
+
+  if (!normalizedAccount.dateOfBirth) {
+    throw new Error("Date of birth is required.");
   }
 
   const createdAuthUser = await createStudentAuthUser(
@@ -279,7 +283,8 @@ export async function createStudentAccount(account) {
       parentPhoneNumber: normalizedAccount.parentPhone,
       studentPhone: normalizedAccount.studentPhone,
       studentPhoneNumber: normalizedAccount.studentPhone,
-      joinDate: normalizedAccount.joinDate,
+      dateOfBirth: normalizedAccount.dateOfBirth,
+      joinDate: normalizedAccount.dateOfBirth,
       attendanceStatus: "present",
       attendanceRate: 0,
       createdAt: serverTimestamp(),

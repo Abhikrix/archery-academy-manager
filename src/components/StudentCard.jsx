@@ -38,8 +38,10 @@ export default function StudentCard({
           <dd className="mt-1 text-white">{student.studentPhoneNumber || "Not added"}</dd>
         </div>
         <div>
-          <dt className="text-neutral-500">Join date</dt>
-          <dd className="mt-1 text-white">{formatDate(student.joinDate)}</dd>
+          <dt className="text-neutral-500">Date of birth</dt>
+          <dd className="mt-1 text-white">
+            {formatDate(student.dateOfBirth || student.joinDate)}
+          </dd>
         </div>
         <div>
           <dt className="text-neutral-500">Monthly fee</dt>

@@ -75,7 +75,7 @@ function getDefaultStudentForm() {
     studentPhoneNumber: "",
     batchId: "junior-a",
     feeAmount: "2800",
-    joinDate: new Date().toISOString().slice(0, 10),
+    dateOfBirth: "",
     feeStatus: "pending",
     attendanceStatus: "present",
     attendanceRate: 0,
@@ -102,7 +102,7 @@ function getDefaultStudentAccountForm() {
     parentName: "",
     parentPhone: "",
     studentPhone: "",
-    joinDate: new Date().toISOString().slice(0, 10),
+    dateOfBirth: "",
     monthlyFee: "2800",
     pendingFees: "0",
     feeStatus: "pending",
@@ -597,6 +597,11 @@ function App() {
       feeAmount: Number(studentForm.feeAmount),
       attendanceRate: Number(studentForm.attendanceRate),
     });
+
+    if (!normalizedStudent.dateOfBirth) {
+      setStudentError("Date of birth is required.");
+      return;
+    }
 
     if (usesFirestoreStudents) {
       setIsSavingStudent(true);
@@ -1410,7 +1415,11 @@ function getMonthlyAnalytics(students, attendanceRecords, feeRecords, month) {
   const absent = attendanceRows.filter((record) => record.status === "absent").length;
   const feeRows = getMonthlyFeeRows(students, feeRecords, month);
   const feeSummary = getFeeSummary(feeRows);
-  const newAdmissions = students.filter((student) => getMonthKeyFromDate(student.joinDate) === month).length;
+  const birthdayMonth = month.slice(5, 7);
+  const birthdaysThisMonth = students.filter((student) => {
+    const dateOfBirth = student.dateOfBirth || student.joinDate || "";
+    return String(dateOfBirth).slice(5, 7) === birthdayMonth;
+  }).length;
 
   return {
     attendancePercentage: getPercentage(present, attendanceRows.length),
@@ -1418,7 +1427,7 @@ function getMonthlyAnalytics(students, attendanceRecords, feeRecords, month) {
     absent,
     markedAttendance: attendanceRows.length,
     activeStudents: students.length,
-    newAdmissions,
+    birthdaysThisMonth,
     feeRows,
     feeSummary,
   };
@@ -1447,11 +1456,13 @@ function escapeHtml(value) {
 }
 
 function openPrintableReport(title, sections) {
-  const printableWindow = window.open("", "_blank", "noopener,noreferrer");
+  const printableWindow = window.open("", "_blank");
 
   if (!printableWindow) {
     return false;
   }
+
+  printableWindow.opener = null;
 
   const body = sections
     .map(
@@ -1489,6 +1500,10 @@ function openPrintableReport(title, sections) {
           table { border-collapse: collapse; width: 100%; margin-bottom: 18px; }
           th, td { border: 1px solid #d7d7d7; padding: 8px; text-align: left; font-size: 12px; }
           th { background: #f3f3f3; }
+          @media print {
+            body { padding: 12mm; }
+            section { break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
@@ -1499,8 +1514,10 @@ function openPrintableReport(title, sections) {
     </html>
   `);
   printableWindow.document.close();
-  printableWindow.focus();
-  printableWindow.print();
+  printableWindow.setTimeout(() => {
+    printableWindow.focus();
+    printableWindow.print();
+  }, 250);
 
   return true;
 }
@@ -2767,13 +2784,16 @@ function UsersManagementView({
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm text-neutral-400">Join date</span>
+            <span className="mb-2 block text-sm text-neutral-400">Date of birth</span>
             <input
               className="field w-full"
               type="date"
-              value={studentAccountForm.joinDate}
+              value={studentAccountForm.dateOfBirth}
               onChange={(event) =>
-                onStudentAccountFormChange({ ...studentAccountForm, joinDate: event.target.value })
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  dateOfBirth: event.target.value,
+                })
               }
               required
             />
@@ -3190,13 +3210,13 @@ function StudentsView({
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm text-neutral-400">Join date</span>
+              <span className="mb-2 block text-sm text-neutral-400">Date of birth</span>
               <input
                 className="field w-full"
                 type="date"
-                value={studentForm.joinDate}
+                value={studentForm.dateOfBirth}
                 onChange={(event) =>
-                  onFormChange({ ...studentForm, joinDate: event.target.value })
+                  onFormChange({ ...studentForm, dateOfBirth: event.target.value })
                 }
                 required
               />
@@ -3497,8 +3517,8 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
           />
           <DashboardCard
             icon={UserPlus}
-            label="New admissions"
-            value={analytics.newAdmissions}
+            label="Birthdays"
+            value={analytics.birthdaysThisMonth}
             helper={formatMonth(reportMonth)}
           />
         </div>
@@ -3715,6 +3735,42 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
 }
 
 function SettingsView() {
+  const settingsCards = [
+    {
+      title: "Academy profile",
+      rows: [
+        ["Default coach", "SREEVAS RS"],
+        ["Student date field", "Date of birth"],
+        ["Theme", "Black and gold"],
+      ],
+    },
+    {
+      title: "Data collections",
+      rows: [
+        ["Students", "students/{uid}"],
+        ["Attendance", "attendance"],
+        ["Fees", "fees"],
+        ["Equipment", "equipmentPurchases"],
+      ],
+    },
+    {
+      title: "Access control",
+      rows: [
+        ["Admin", "Full access"],
+        ["Coach", "Attendance, fees, equipment, reports"],
+        ["Student", "Read-only portal"],
+      ],
+    },
+    {
+      title: "Exports",
+      rows: [
+        ["Reports", "PDF and CSV"],
+        ["Fee reports", "CSV"],
+        ["Production routing", "Vercel SPA rewrites"],
+      ],
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <section>
@@ -3723,20 +3779,19 @@ function SettingsView() {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="surface p-4">
-          <h3 className="text-lg font-semibold text-white">Fee cycle</h3>
-          <p className="mt-2 text-sm leading-6 text-neutral-400">
-            Monthly fee register is prepared for future Firebase-backed billing rules and due-date
-            automation.
-          </p>
-        </article>
-        <article className="surface p-4">
-          <h3 className="text-lg font-semibold text-white">Role access</h3>
-          <p className="mt-2 text-sm leading-6 text-neutral-400">
-            Admin-only configuration lives here so coach and student accounts stay on operational
-            views only.
-          </p>
-        </article>
+        {settingsCards.map((card) => (
+          <article key={card.title} className="surface p-4">
+            <h3 className="text-lg font-semibold text-white">{card.title}</h3>
+            <dl className="mt-4 space-y-3 text-sm">
+              {card.rows.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-4">
+                  <dt className="text-neutral-500">{label}</dt>
+                  <dd className="text-right font-medium text-white">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </article>
+        ))}
       </div>
     </div>
   );
