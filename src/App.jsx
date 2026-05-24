@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Download,
+  Megaphone,
   Package,
   Pencil,
   Search,
@@ -28,24 +29,29 @@ import { PERMISSIONS, ROLES } from "./constants/roles";
 import { useAuth } from "./context/AuthContext";
 import {
   createAttendanceRecord,
+  createAnnouncementRecord,
   createEquipmentPurchaseRecord,
   createInitialAttendanceRecords,
   createInitialFeeRecords,
   createFeeRecord,
   createStudentRecord,
   deleteStudentRecord,
+  deleteAnnouncementRecord,
   getInitialAcademySnapshot,
   removeStudentRecord,
   saveAttendanceRecord,
+  saveAnnouncementRecord,
   saveEquipmentPurchaseRecord,
   saveFeeRecord,
   saveStudentRecord,
   subscribeToAttendanceRecords,
+  subscribeToAnnouncements,
   subscribeToEquipmentPurchases,
   subscribeToFeeRecords,
   subscribeToStudentRecord,
   subscribeToStudentRecords,
   updateStudentRecord,
+  upsertAnnouncementRecord,
   upsertAttendanceRecord,
   upsertEquipmentPurchaseRecord,
   upsertFeeRecord,
@@ -123,6 +129,16 @@ function getDefaultEquipmentForm() {
   };
 }
 
+function getDefaultAnnouncementForm() {
+  return {
+    id: "",
+    title: "",
+    message: "",
+    createdAt: null,
+    createdBy: "",
+  };
+}
+
 function getProfileStudentId(profile) {
   return profile?.uid || "";
 }
@@ -149,12 +165,21 @@ const roleViews = {
     "attendance-history",
     "fees",
     "equipment",
+    "announcements",
     "students",
     "reports",
     "users",
     "settings",
   ],
-  [ROLES.COACH]: ["attendance", "attendance-history", "fees", "equipment", "students", "reports"],
+  [ROLES.COACH]: [
+    "dashboard",
+    "attendance",
+    "attendance-history",
+    "fees",
+    "equipment",
+    "students",
+    "reports",
+  ],
   [ROLES.STUDENT]: ["overview"],
 };
 
@@ -165,6 +190,7 @@ function App() {
   const [attendanceRecords, setAttendanceRecords] = useState(() =>
     createInitialAttendanceRecords(snapshot.students),
   );
+  const [announcements, setAnnouncements] = useState([]);
   const [feeRecords, setFeeRecords] = useState(() => createInitialFeeRecords(snapshot.students));
   const [equipmentPurchases, setEquipmentPurchases] = useState([]);
   const [attendanceDate, setAttendanceDate] = useState(getLocalDateKey);
@@ -172,26 +198,32 @@ function App() {
   const [studentForm, setStudentForm] = useState(getDefaultStudentForm);
   const [studentAccountForm, setStudentAccountForm] = useState(getDefaultStudentAccountForm);
   const [equipmentForm, setEquipmentForm] = useState(getDefaultEquipmentForm);
+  const [announcementForm, setAnnouncementForm] = useState(getDefaultAnnouncementForm);
   const [userProfiles, setUserProfiles] = useState([]);
   const [userForm, setUserForm] = useState(getDefaultUserForm);
   const [editingStudentId, setEditingStudentId] = useState(null);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
   const [editingEquipmentPurchaseId, setEditingEquipmentPurchaseId] = useState(null);
   const [editingUserId, setEditingUserId] = useState(null);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
   const [isLoadingFees, setIsLoadingFees] = useState(false);
   const [isLoadingEquipment, setIsLoadingEquipment] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false);
   const [isSavingEquipment, setIsSavingEquipment] = useState(false);
   const [isCreatingStudentAccount, setIsCreatingStudentAccount] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [studentError, setStudentError] = useState("");
   const [attendanceError, setAttendanceError] = useState("");
+  const [announcementError, setAnnouncementError] = useState("");
   const [feeError, setFeeError] = useState("");
   const [equipmentError, setEquipmentError] = useState("");
   const [userError, setUserError] = useState("");
   const [studentNotice, setStudentNotice] = useState("");
+  const [announcementNotice, setAnnouncementNotice] = useState("");
   const [studentAccountError, setStudentAccountError] = useState("");
   const [studentAccountNotice, setStudentAccountNotice] = useState("");
   const [feeNotice, setFeeNotice] = useState("");
@@ -263,6 +295,27 @@ function App() {
       },
     );
   }, [profile, usesFirestoreStudents]);
+
+  useEffect(() => {
+    if (!usesFirestoreStudents) {
+      setIsLoadingAnnouncements(false);
+      return undefined;
+    }
+
+    setIsLoadingAnnouncements(true);
+
+    return subscribeToAnnouncements(
+      (nextAnnouncements) => {
+        setAnnouncements(nextAnnouncements);
+        setAnnouncementError("");
+        setIsLoadingAnnouncements(false);
+      },
+      (error) => {
+        setAnnouncementError(error.message);
+        setIsLoadingAnnouncements(false);
+      },
+    );
+  }, [usesFirestoreStudents]);
 
   useEffect(() => {
     if (!usesFirestoreStudents) {
@@ -448,6 +501,97 @@ function App() {
         ? `${nextRecord.studentName} marked paid locally.`
         : `${nextRecord.studentName} fee record saved locally.`,
     );
+  }
+
+  function resetAnnouncementForm() {
+    setEditingAnnouncementId(null);
+    setAnnouncementForm(getDefaultAnnouncementForm());
+  }
+
+  function startEditingAnnouncement(announcement) {
+    setEditingAnnouncementId(announcement.id);
+    setAnnouncementError("");
+    setAnnouncementNotice("");
+    setAnnouncementForm({
+      ...announcement,
+      title: announcement.title || "",
+      message: announcement.message || "",
+    });
+  }
+
+  async function submitAnnouncementForm(event) {
+    event.preventDefault();
+    setAnnouncementError("");
+    setAnnouncementNotice("");
+
+    const nextAnnouncement = createAnnouncementRecord({
+      ...announcementForm,
+      id: editingAnnouncementId || announcementForm.id,
+      createdBy: profile?.name || profile?.email || profile?.uid || "Admin",
+    });
+
+    if (!nextAnnouncement.title) {
+      setAnnouncementError("Announcement title is required.");
+      return;
+    }
+
+    if (!nextAnnouncement.message) {
+      setAnnouncementError("Announcement message is required.");
+      return;
+    }
+
+    setIsSavingAnnouncement(true);
+
+    if (usesFirestoreStudents) {
+      try {
+        await saveAnnouncementRecord(nextAnnouncement);
+        setAnnouncementNotice(
+          editingAnnouncementId ? "Announcement updated." : "Announcement created.",
+        );
+        resetAnnouncementForm();
+      } catch (error) {
+        setAnnouncementError(error.message);
+      } finally {
+        setIsSavingAnnouncement(false);
+      }
+      return;
+    }
+
+    setAnnouncements((currentAnnouncements) =>
+      upsertAnnouncementRecord(currentAnnouncements, {
+        ...nextAnnouncement,
+        createdAt: nextAnnouncement.createdAt || new Date().toISOString(),
+      }),
+    );
+    setAnnouncementNotice(
+      editingAnnouncementId ? "Announcement updated locally." : "Announcement created locally.",
+    );
+    resetAnnouncementForm();
+    setIsSavingAnnouncement(false);
+  }
+
+  async function deleteAnnouncement(announcementId) {
+    setAnnouncementError("");
+    setAnnouncementNotice("");
+
+    if (usesFirestoreStudents) {
+      try {
+        await deleteAnnouncementRecord(announcementId);
+        setAnnouncementNotice("Announcement deleted.");
+
+        if (editingAnnouncementId === announcementId) {
+          resetAnnouncementForm();
+        }
+      } catch (error) {
+        setAnnouncementError(error.message);
+      }
+      return;
+    }
+
+    setAnnouncements((currentAnnouncements) =>
+      currentAnnouncements.filter((announcement) => announcement.id !== announcementId),
+    );
+    setAnnouncementNotice("Announcement deleted locally.");
   }
 
   function resetEquipmentForm() {
@@ -756,6 +900,10 @@ function App() {
               role={ROLES.ADMIN}
               batches={snapshot.batches}
               students={students}
+              announcements={announcements}
+              announcementError={announcementError}
+              announcementForm={announcementForm}
+              announcementNotice={announcementNotice}
               attendanceDate={attendanceDate}
               attendanceError={attendanceError}
               attendanceRecords={attendanceRecords}
@@ -771,15 +919,18 @@ function App() {
               studentAccountForm={studentAccountForm}
               studentForm={studentForm}
               userForm={userForm}
+              editingAnnouncementId={editingAnnouncementId}
               editingEquipmentPurchaseId={editingEquipmentPurchaseId}
               editingStudentId={editingStudentId}
               editingUserId={editingUserId}
               isLoadingAttendance={isLoadingAttendance}
+              isLoadingAnnouncements={isLoadingAnnouncements}
               isLoadingEquipment={isLoadingEquipment}
               isLoadingFees={isLoadingFees}
               isLoadingStudents={isLoadingStudents}
               isLoadingUsers={isLoadingUsers}
               isCreatingStudentAccount={isCreatingStudentAccount}
+              isSavingAnnouncement={isSavingAnnouncement}
               isSavingEquipment={isSavingEquipment}
               isSavingStudent={isSavingStudent}
               isSavingUser={isSavingUser}
@@ -791,6 +942,10 @@ function App() {
               studentAccountNotice={studentAccountNotice}
               userNotice={userNotice}
               onAttendanceDateChange={setAttendanceDate}
+              onAnnouncementFormChange={setAnnouncementForm}
+              onCancelAnnouncement={resetAnnouncementForm}
+              onDeleteAnnouncement={deleteAnnouncement}
+              onEditAnnouncement={startEditingAnnouncement}
               onFeeMonthChange={setFeeMonth}
               onMarkAll={updateAllAttendance}
               onSubmitEquipmentPurchase={submitEquipmentPurchaseForm}
@@ -800,6 +955,7 @@ function App() {
               onStudentAccountFormChange={setStudentAccountForm}
               onUserFormChange={setUserForm}
               onSubmitStudent={submitStudentForm}
+              onSubmitAnnouncement={submitAnnouncementForm}
               onSubmitStudentAccount={submitStudentAccountForm}
               onSubmitUser={submitUserForm}
               onCancelStudent={resetStudentForm}
@@ -824,6 +980,8 @@ function App() {
               role={ROLES.COACH}
               batches={snapshot.batches}
               students={students}
+              announcements={announcements}
+              announcementError={announcementError}
               attendanceDate={attendanceDate}
               attendanceError={attendanceError}
               attendanceRecords={attendanceRecords}
@@ -838,6 +996,7 @@ function App() {
               userProfiles={userProfiles}
               editingEquipmentPurchaseId={editingEquipmentPurchaseId}
               isLoadingAttendance={isLoadingAttendance}
+              isLoadingAnnouncements={isLoadingAnnouncements}
               isLoadingEquipment={isLoadingEquipment}
               isLoadingFees={isLoadingFees}
               isSavingEquipment={isSavingEquipment}
@@ -864,12 +1023,15 @@ function App() {
               <StudentPortal
                 attendanceRecords={attendanceRecords}
                 attendanceError={attendanceError}
+                announcements={announcements}
+                announcementError={announcementError}
                 feeRecords={feeRecords}
                 feeError={feeError}
                 equipmentPurchases={equipmentPurchases}
                 equipmentError={equipmentError}
                 batches={snapshot.batches}
                 isLoadingAttendance={isLoadingAttendance}
+                isLoadingAnnouncements={isLoadingAnnouncements}
                 isLoadingEquipment={isLoadingEquipment}
                 isLoadingFees={isLoadingFees}
                 isLoadingStudents={isLoadingStudents}
@@ -934,6 +1096,10 @@ function ManagementPortal({
   role,
   batches,
   students,
+  announcements,
+  announcementError,
+  announcementForm,
+  announcementNotice,
   attendanceDate,
   attendanceError,
   attendanceRecords,
@@ -949,15 +1115,18 @@ function ManagementPortal({
   studentAccountForm,
   studentForm,
   userForm,
+  editingAnnouncementId,
   editingEquipmentPurchaseId,
   editingStudentId,
   editingUserId,
   isLoadingAttendance,
+  isLoadingAnnouncements,
   isLoadingEquipment,
   isLoadingFees,
   isLoadingStudents,
   isLoadingUsers,
   isCreatingStudentAccount,
+  isSavingAnnouncement,
   isSavingEquipment,
   isSavingStudent,
   isSavingUser,
@@ -969,12 +1138,17 @@ function ManagementPortal({
   userNotice,
   onAttendanceChange,
   onAttendanceDateChange,
+  onAnnouncementFormChange,
+  onCancelAnnouncement,
+  onDeleteAnnouncement,
+  onEditAnnouncement,
   onCancelEquipment,
   onFeeMonthChange,
   onEditEquipmentPurchase,
   onMarkEquipmentPaid,
   onMarkAll,
   onSubmitEquipmentPurchase,
+  onSubmitAnnouncement,
   onUpdateFeeStatus,
   onUpdateEquipmentForm,
   onFormChange,
@@ -1029,12 +1203,25 @@ function ManagementPortal({
     >
       {activeView === "dashboard" && role === ROLES.ADMIN && (
         <DashboardOverview
+          announcements={announcements}
+          announcementError={announcementError}
           attendanceRecords={attendanceRecords}
           equipmentPurchases={equipmentPurchases}
           feeRecords={feeRecords}
           metrics={metrics}
           students={students}
           batches={batches}
+          isLoadingAnnouncements={isLoadingAnnouncements}
+        />
+      )}
+      {activeView === "dashboard" && role === ROLES.COACH && (
+        <CoachDashboardView
+          announcements={announcements}
+          announcementError={announcementError}
+          attendanceRecords={attendanceRecords}
+          feeRecords={feeRecords}
+          isLoadingAnnouncements={isLoadingAnnouncements}
+          students={students}
         />
       )}
       {activeView === "attendance" && (
@@ -1087,6 +1274,22 @@ function ManagementPortal({
           onMarkPaid={onMarkEquipmentPaid}
           onSubmit={onSubmitEquipmentPurchase}
           students={students}
+        />
+      )}
+      {activeView === "announcements" && permissions.canManageAnnouncements && (
+        <AnnouncementsManagementView
+          announcementError={announcementError}
+          announcementForm={announcementForm}
+          announcementNotice={announcementNotice}
+          announcements={announcements}
+          editingAnnouncementId={editingAnnouncementId}
+          isLoadingAnnouncements={isLoadingAnnouncements}
+          isSavingAnnouncement={isSavingAnnouncement}
+          onCancel={onCancelAnnouncement}
+          onDelete={onDeleteAnnouncement}
+          onEdit={onEditAnnouncement}
+          onFormChange={onAnnouncementFormChange}
+          onSubmit={onSubmitAnnouncement}
         />
       )}
       {activeView === "students" && permissions.canViewStudents && (
@@ -1149,12 +1352,15 @@ function ManagementPortal({
 function StudentPortal({
   attendanceRecords,
   attendanceError,
+  announcements,
+  announcementError,
   batches,
   equipmentPurchases,
   equipmentError,
   feeRecords,
   feeError,
   isLoadingAttendance,
+  isLoadingAnnouncements,
   isLoadingEquipment,
   isLoadingFees,
   isLoadingStudents,
@@ -1198,12 +1404,20 @@ function StudentPortal({
         <StudentOverview
           attendanceRecords={attendanceRecords}
           attendanceError={attendanceError}
+          announcements={announcements}
+          announcementError={announcementError}
           batches={batches}
           equipmentPurchases={equipmentPurchases}
           equipmentError={equipmentError}
           feeRecords={feeRecords}
           feeError={feeError}
-          isLoading={isLoadingStudents || isLoadingAttendance || isLoadingFees || isLoadingEquipment}
+          isLoading={
+            isLoadingStudents ||
+            isLoadingAttendance ||
+            isLoadingFees ||
+            isLoadingEquipment ||
+            isLoadingAnnouncements
+          }
           student={student}
           studentError={studentError}
           studentId={studentId}
@@ -1216,6 +1430,7 @@ function StudentPortal({
 function buildNavigation(role, permissions) {
   if (role === ROLES.COACH) {
     return [
+      { id: "dashboard", label: "Dashboard" },
       { id: "attendance", label: "Attendance" },
       { id: "attendance-history", label: "History" },
       { id: "fees", label: "Fees" },
@@ -1231,6 +1446,7 @@ function buildNavigation(role, permissions) {
     { id: "attendance-history", label: "History" },
     { id: "fees", label: "Fees" },
     { id: "equipment", label: "Equipment" },
+    { id: "announcements", label: "Announcements" },
   ];
 
   if (permissions.canViewStudents) {
@@ -1611,7 +1827,121 @@ function LoadingScreen() {
   );
 }
 
-function DashboardOverview({ attendanceRecords, equipmentPurchases, feeRecords, metrics, students, batches }) {
+function LatestAnnouncementsPanel({ announcements = [], error = "", isLoading = false, limit = 3 }) {
+  const latestAnnouncements = announcements.slice(0, limit);
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="section-title">Latest Announcements</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Academy updates</h2>
+        </div>
+        <p className="text-sm text-neutral-400">{announcements.length} published</p>
+      </div>
+
+      {error && (
+        <p className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+          {error}
+        </p>
+      )}
+
+      {isLoading ? (
+        <div className="surface p-4 text-sm text-neutral-400">Loading announcements...</div>
+      ) : latestAnnouncements.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">
+          No announcements have been published yet.
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {latestAnnouncements.map((announcement) => (
+            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
+                  <Megaphone size={18} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="break-words font-semibold text-white">{announcement.title}</h3>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
+                    {announcement.message}
+                  </p>
+                  <p className="mt-3 text-xs text-neutral-500">
+                    {formatDate(announcement.createdAt)} by {announcement.createdBy || "Admin"}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CoachDashboardView({
+  announcements,
+  announcementError,
+  attendanceRecords,
+  feeRecords,
+  isLoadingAnnouncements,
+  students,
+}) {
+  const todayDate = getLocalDateKey();
+  const month = getLocalMonthKey();
+  const metrics = getMetrics(students, attendanceRecords, feeRecords, [], todayDate, month);
+
+  return (
+    <div className="space-y-8">
+      <section>
+        <p className="section-title">Dashboard</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardCard
+            icon={Users}
+            label="Students"
+            value={metrics.totalStudents}
+            helper="View-only roster access"
+          />
+          <DashboardCard
+            icon={CalendarDays}
+            label="Today's attendance"
+            value={`${metrics.presentToday}/${metrics.totalStudents}`}
+            helper="Students marked present"
+          />
+          <DashboardCard
+            icon={ClipboardCheck}
+            label="Pending fees"
+            value={metrics.pendingFeesCount}
+            helper="Fee records needing follow-up"
+          />
+          <DashboardCard
+            icon={Megaphone}
+            label="Latest announcements"
+            value={announcements.length}
+            helper={announcements[0]?.title || "No announcements yet"}
+          />
+        </div>
+      </section>
+
+      <LatestAnnouncementsPanel
+        announcements={announcements}
+        error={announcementError}
+        isLoading={isLoadingAnnouncements}
+      />
+    </div>
+  );
+}
+
+function DashboardOverview({
+  announcements,
+  announcementError,
+  attendanceRecords,
+  equipmentPurchases,
+  feeRecords,
+  isLoadingAnnouncements,
+  metrics,
+  students,
+  batches,
+}) {
   const recentStudents = students.slice(0, 4);
   const todayDate = getLocalDateKey();
   const recentEquipmentPurchases = metrics.recentEquipmentPurchases || getRecentEquipmentPurchases(equipmentPurchases);
@@ -1657,8 +1987,20 @@ function DashboardOverview({ attendanceRecords, equipmentPurchases, feeRecords, 
             value={formatCurrency(metrics.equipmentSales)}
             helper={`${formatCurrency(metrics.pendingEquipmentDues)} equipment dues`}
           />
+          <DashboardCard
+            icon={Megaphone}
+            label="Latest announcements"
+            value={announcements.length}
+            helper={announcements[0]?.title || "No announcements yet"}
+          />
         </div>
       </section>
+
+      <LatestAnnouncementsPanel
+        announcements={announcements}
+        error={announcementError}
+        isLoading={isLoadingAnnouncements}
+      />
 
       <section>
         <div className="flex items-end justify-between gap-3">
@@ -2327,6 +2669,148 @@ function FeesView({
             )}
           </section>
         </>
+      )}
+    </div>
+  );
+}
+
+function AnnouncementsManagementView({
+  announcementError,
+  announcementForm,
+  announcementNotice,
+  announcements,
+  editingAnnouncementId,
+  isLoadingAnnouncements,
+  isSavingAnnouncement,
+  onCancel,
+  onDelete,
+  onEdit,
+  onFormChange,
+  onSubmit,
+}) {
+  function updateForm(patch) {
+    onFormChange((currentForm) => ({
+      ...currentForm,
+      ...patch,
+    }));
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="section-title">Announcements</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Academy updates</h2>
+          <p className="mt-2 text-sm text-neutral-400">
+            Publish messages for coaches, students, and parents.
+          </p>
+        </div>
+        <p className="text-sm text-neutral-400">{announcements.length} published</p>
+      </section>
+
+      <form className="surface space-y-4 p-4" onSubmit={onSubmit}>
+        <div>
+          <p className="section-title">
+            {editingAnnouncementId ? "Edit announcement" : "Create announcement"}
+          </p>
+          <h3 className="mt-2 text-lg font-semibold text-white">
+            {editingAnnouncementId ? announcementForm.title : "New academy update"}
+          </h3>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Title</span>
+            <input
+              className="field w-full"
+              placeholder="Training schedule update"
+              value={announcementForm.title}
+              onChange={(event) => updateForm({ title: event.target.value })}
+              required
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Message</span>
+            <textarea
+              className="field min-h-24 w-full resize-y py-3"
+              placeholder="Write the announcement message..."
+              value={announcementForm.message}
+              onChange={(event) => updateForm({ message: event.target.value })}
+              required
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="submit" className="gold-button min-h-11" disabled={isSavingAnnouncement}>
+            <Save size={16} />
+            {isSavingAnnouncement
+              ? "Saving..."
+              : editingAnnouncementId
+                ? "Update announcement"
+                : "Publish announcement"}
+          </button>
+          {editingAnnouncementId && (
+            <button type="button" className="ghost-button min-h-11" onClick={onCancel}>
+              Cancel edit
+            </button>
+          )}
+        </div>
+
+        {(announcementError || announcementNotice) && (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              announcementError
+                ? "border-rose-400/30 bg-rose-400/10 text-rose-100"
+                : "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+            }`}
+          >
+            {announcementError || announcementNotice}
+          </p>
+        )}
+      </form>
+
+      {isLoadingAnnouncements ? (
+        <div className="surface p-4 text-sm text-neutral-400">Loading announcements...</div>
+      ) : announcements.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">
+          No announcements have been published yet.
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {announcements.map((announcement) => (
+            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="section-title">{formatDate(announcement.createdAt)}</p>
+                  <h3 className="mt-2 break-words text-lg font-semibold text-white">
+                    {announcement.title}
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
+                    {announcement.message}
+                  </p>
+                  <p className="mt-3 text-xs text-neutral-500">
+                    Created by {announcement.createdBy || "Admin"}
+                  </p>
+                </div>
+                <div className="grid shrink-0 gap-2 sm:w-36">
+                  <button type="button" className="ghost-button min-h-10" onClick={() => onEdit(announcement)}>
+                    <Pencil size={16} />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button min-h-10 text-rose-200 hover:border-rose-400/60 hover:text-rose-100"
+                    onClick={() => onDelete(announcement.id)}
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
       )}
     </div>
   );

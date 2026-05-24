@@ -277,6 +277,25 @@ service cloud.firestore {
         && studentExists(request.resource.data.studentId);
     }
 
+    function validAnnouncementRecord() {
+      return request.resource.data.keys().hasAll([
+          'title',
+          'message',
+          'createdAt',
+          'createdBy'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'message',
+          'createdAt',
+          'createdBy'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdBy is string;
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
 
@@ -350,6 +369,20 @@ service cloud.firestore {
 
       allow update: if isStaff()
         && validEquipmentPurchaseRecord();
+
+      allow delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+
+      allow create: if isAdmin()
+        && validAnnouncementRecord()
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        && validAnnouncementRecord()
+        && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if isAdmin();
     }

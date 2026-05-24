@@ -1,5 +1,12 @@
 import * as React from "react";
-import { CalendarDays, CircleDollarSign, ClipboardCheck, Package, Users } from "lucide-react";
+import {
+  CalendarDays,
+  CircleDollarSign,
+  ClipboardCheck,
+  Megaphone,
+  Package,
+  Users,
+} from "lucide-react";
 import DashboardCard from "./DashboardCard";
 import FeeStatusBadge from "./FeeStatusBadge";
 import {
@@ -61,9 +68,57 @@ function AttendanceStatusBadge({ status }) {
   );
 }
 
+function StudentAnnouncements({ announcements = [], error = "" }) {
+  const latestAnnouncements = announcements.slice(0, 3);
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <p className="section-title">Latest Announcements</p>
+        <h3 className="mt-2 text-lg font-semibold text-white">Academy updates</h3>
+      </div>
+
+      {error && (
+        <p className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+          {error}
+        </p>
+      )}
+
+      {latestAnnouncements.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">
+          No announcements have been published yet.
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {latestAnnouncements.map((announcement) => (
+            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
+                  <Megaphone size={18} />
+                </span>
+                <div className="min-w-0">
+                  <h4 className="break-words font-semibold text-white">{announcement.title}</h4>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
+                    {announcement.message}
+                  </p>
+                  <p className="mt-3 text-xs text-neutral-500">
+                    {formatDate(announcement.createdAt)}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function StudentOverview({
   attendanceRecords = [],
   attendanceError = "",
+  announcements = [],
+  announcementError = "",
   batches = [],
   equipmentPurchases = [],
   equipmentError = "",
@@ -74,11 +129,12 @@ export default function StudentOverview({
   studentError = "",
   studentId = "",
 }) {
-  const portalErrors = [studentError, attendanceError, feeError, equipmentError].filter(Boolean);
+  const portalErrors = [studentError, attendanceError, feeError, equipmentError, announcementError].filter(Boolean);
 
   if (import.meta.env.DEV) {
     console.debug("[StudentOverview]", {
       attendanceRecords: attendanceRecords.length,
+      announcements: announcements.length,
       equipmentPurchases: equipmentPurchases.length,
       feeRecords: feeRecords.length,
       hasStudent: Boolean(student),
@@ -250,7 +306,15 @@ export default function StudentOverview({
           value={formatCurrency(equipmentTotals.due)}
           helper={`${ownEquipmentPurchases.length} purchase records`}
         />
+        <DashboardCard
+          icon={Megaphone}
+          label="Latest announcements"
+          value={announcements.length}
+          helper={announcements[0]?.title || "No announcements yet"}
+        />
       </div>
+
+      <StudentAnnouncements announcements={announcements} error={announcementError} />
 
       <section className="surface p-4">
         <h3 className="text-lg font-semibold text-white">Student and parent details</h3>

@@ -2,7 +2,7 @@ import { ROLES } from "../constants/roles";
 
 export const ROLE_HOME_PATHS = {
   [ROLES.ADMIN]: "/admin/dashboard",
-  [ROLES.COACH]: "/coach/attendance",
+  [ROLES.COACH]: "/coach/dashboard",
   [ROLES.STUDENT]: "/student/overview",
 };
 

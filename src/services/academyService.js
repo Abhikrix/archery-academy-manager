@@ -70,6 +70,15 @@ function normalizeEquipmentPurchaseSnapshot(snapshot) {
   });
 }
 
+function normalizeAnnouncementSnapshot(snapshot) {
+  const data = snapshot.data();
+
+  return createAnnouncementRecord({
+    ...data,
+    id: snapshot.id,
+  });
+}
+
 function getAttendanceRecordId(studentId, date) {
   return `${studentId}_${date}`.replace(/\//g, "-");
 }
@@ -80,6 +89,10 @@ function getFeeRecordId(studentId, month) {
 
 function getEquipmentPurchaseId() {
   return `equipment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getAnnouncementId() {
+  return `announcement-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function sortAttendanceRecords(records) {
@@ -110,6 +123,25 @@ function sortEquipmentPurchases(records) {
 
     return second.purchaseDate.localeCompare(first.purchaseDate);
   });
+}
+
+function getTimestampMillis(value) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value.toMillis === "function") {
+    return value.toMillis();
+  }
+
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function sortAnnouncements(records) {
+  return [...records].sort(
+    (first, second) => getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt),
+  );
 }
 
 export function getInitialAcademySnapshot() {
@@ -252,6 +284,27 @@ export function upsertEquipmentPurchaseRecord(records, nextRecord) {
   return sortEquipmentPurchases([...nextRecords, normalizedRecord]);
 }
 
+export function createAnnouncementRecord(record) {
+  return {
+    id: String(record.id || "").trim() || getAnnouncementId(),
+    title: String(record.title || "").trim(),
+    message: String(record.message || "").trim(),
+    createdAt: record.createdAt || null,
+    createdBy: String(record.createdBy || "").trim(),
+  };
+}
+
+export function upsertAnnouncementRecord(records, nextRecord) {
+  const normalizedRecord = createAnnouncementRecord(nextRecord);
+
+  if (!normalizedRecord.id || !normalizedRecord.title || !normalizedRecord.message) {
+    return records;
+  }
+
+  const nextRecords = records.filter((record) => record.id !== normalizedRecord.id);
+  return sortAnnouncements([...nextRecords, normalizedRecord]);
+}
+
 export function createStudentRecord(student) {
   const id = String(student.id || student.uid || student.studentId || "").trim();
   const feeAmount = Number(student.feeAmount ?? student.monthlyFee ?? 0);
@@ -374,6 +427,18 @@ export function subscribeToEquipmentPurchases(options, onRecords, onError) {
   );
 }
 
+export function subscribeToAnnouncements(onRecords, onError) {
+  requireFirestore();
+
+  return onSnapshot(
+    query(collection(db, "announcements")),
+    (snapshot) => {
+      onRecords(sortAnnouncements(snapshot.docs.map(normalizeAnnouncementSnapshot)));
+    },
+    onError,
+  );
+}
+
 export async function saveAttendanceRecord(record) {
   requireFirestore();
 
@@ -479,6 +544,29 @@ export async function saveEquipmentPurchaseRecord(record) {
   return normalizedRecord;
 }
 
+export async function saveAnnouncementRecord(record) {
+  requireFirestore();
+
+  const normalizedRecord = createAnnouncementRecord(record);
+
+  if (!normalizedRecord.title) {
+    throw new Error("Announcement title is required.");
+  }
+
+  if (!normalizedRecord.message) {
+    throw new Error("Announcement message is required.");
+  }
+
+  await setDoc(doc(db, "announcements", normalizedRecord.id), {
+    title: normalizedRecord.title,
+    message: normalizedRecord.message,
+    createdAt: normalizedRecord.createdAt || serverTimestamp(),
+    createdBy: normalizedRecord.createdBy,
+  });
+
+  return normalizedRecord;
+}
+
 export async function saveStudentRecord(student) {
   requireFirestore();
 
@@ -524,4 +612,10 @@ export async function deleteStudentRecord(studentId) {
   requireFirestore();
 
   await deleteDoc(doc(db, "students", studentId));
+}
+
+export async function deleteAnnouncementRecord(announcementId) {
+  requireFirestore();
+
+  await deleteDoc(doc(db, "announcements", announcementId));
 }
