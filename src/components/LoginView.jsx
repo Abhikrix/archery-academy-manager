@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LockKeyhole, LogIn, Mail } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import heroImage from "../assets/login-hero.jpg";
 import { useAuth } from "../context/AuthContext";
@@ -10,6 +10,7 @@ export default function LoginView() {
   const { authError, isFirebaseConfigured, loading, login, profile } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -84,14 +85,22 @@ export default function LoginView() {
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
                 />
                 <input
-                  className="field w-full pl-10"
-                  type="password"
+                  className="field w-full pl-10 pr-11"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="Enter password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition-all duration-200 hover:bg-white/[0.04] hover:text-[rgb(var(--academy-gold))] focus:bg-white/[0.08] focus:text-[rgb(var(--academy-gold))] focus:outline-none active:scale-95"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </span>
             </label>
 
