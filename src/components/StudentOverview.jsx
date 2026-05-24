@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarDays, CircleDollarSign, ClipboardCheck, Users } from "lucide-react";
+import { CalendarDays, CircleDollarSign, ClipboardCheck, Package, Users } from "lucide-react";
 import DashboardCard from "./DashboardCard";
 import FeeStatusBadge from "./FeeStatusBadge";
 import {
@@ -50,6 +50,8 @@ export default function StudentOverview({
   attendanceRecords = [],
   attendanceError = "",
   batches = [],
+  equipmentPurchases = [],
+  equipmentError = "",
   feeRecords = [],
   feeError = "",
   isLoading = false,
@@ -57,11 +59,12 @@ export default function StudentOverview({
   studentError = "",
   studentId = "",
 }) {
-  const portalErrors = [studentError, attendanceError, feeError].filter(Boolean);
+  const portalErrors = [studentError, attendanceError, feeError, equipmentError].filter(Boolean);
 
   if (import.meta.env.DEV) {
     console.debug("[StudentOverview]", {
       attendanceRecords: attendanceRecords.length,
+      equipmentPurchases: equipmentPurchases.length,
       feeRecords: feeRecords.length,
       hasStudent: Boolean(student),
       studentFields: student ? Object.keys(student).sort() : [],
@@ -138,6 +141,15 @@ export default function StudentOverview({
     currentFeeRecord?.dueAmount ?? profilePendingFees ?? Math.max(currentFeeAmount - currentAmountPaid, 0);
   const ownAttendanceRecords = attendanceRecords.filter((record) => record.studentId === student.id);
   const ownFeeRecords = feeRecords.filter((record) => record.studentId === student.id);
+  const ownEquipmentPurchases = equipmentPurchases.filter((record) => record.studentId === student.id);
+  const equipmentTotals = ownEquipmentPurchases.reduce(
+    (summary, purchase) => ({
+      paid: summary.paid + purchase.paidAmount,
+      due: summary.due + purchase.dueAmount,
+      total: summary.total + purchase.totalPrice,
+    }),
+    { paid: 0, due: 0, total: 0 },
+  );
   const currentMonthAttendanceRecords = ownAttendanceRecords.filter(
     (record) => getMonthKeyFromDate(record.date) === getLocalMonthKey(),
   );
@@ -215,6 +227,12 @@ export default function StudentOverview({
           helper={`Today: ${
             todayStatus === "present" ? "Present" : todayStatus === "absent" ? "Absent" : "Not marked"
           }`}
+        />
+        <DashboardCard
+          icon={Package}
+          label="Equipment dues"
+          value={formatCurrency(equipmentTotals.due)}
+          helper={`${ownEquipmentPurchases.length} purchase records`}
         />
       </div>
 
@@ -324,6 +342,78 @@ export default function StudentOverview({
               </article>
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <p className="section-title">Equipment</p>
+          <h3 className="mt-2 text-lg font-semibold text-white">Purchased equipment</h3>
+        </div>
+
+        {ownEquipmentPurchases.length === 0 ? (
+          <div className="surface p-4 text-sm text-neutral-400">
+            No equipment purchases found for this account.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <DashboardCard
+                icon={Package}
+                label="Equipment total"
+                value={formatCurrency(equipmentTotals.total)}
+                helper="Total purchase value"
+              />
+              <DashboardCard
+                icon={CircleDollarSign}
+                label="Equipment paid"
+                value={formatCurrency(equipmentTotals.paid)}
+                helper="Payment history"
+              />
+              <DashboardCard
+                icon={ClipboardCheck}
+                label="Equipment pending"
+                value={formatCurrency(equipmentTotals.due)}
+                helper="Pending balance"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {ownEquipmentPurchases.map((purchase) => (
+                <article key={purchase.id} className="surface p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                        {purchase.category}
+                      </p>
+                      <h4 className="mt-2 font-semibold text-white">{purchase.itemName}</h4>
+                      <p className="mt-1 text-sm text-neutral-400">
+                        Purchased {formatDate(purchase.purchaseDate)}
+                      </p>
+                    </div>
+                    <FeeStatusBadge status={purchase.paymentStatus} />
+                  </div>
+                  <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <dt className="text-neutral-500">Total</dt>
+                      <dd className="mt-1 text-white">{formatCurrency(purchase.totalPrice)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Paid</dt>
+                      <dd className="mt-1 text-white">{formatCurrency(purchase.paidAmount)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Due</dt>
+                      <dd className="mt-1 text-white">{formatCurrency(purchase.dueAmount)}</dd>
+                    </div>
+                  </dl>
+                  {purchase.notes && (
+                    <p className="mt-3 text-sm text-neutral-300">{purchase.notes}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          </>
         )}
       </section>
     </div>

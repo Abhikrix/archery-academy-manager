@@ -60,12 +60,25 @@ function normalizeFeeSnapshot(snapshot) {
   });
 }
 
+function normalizeEquipmentPurchaseSnapshot(snapshot) {
+  const data = snapshot.data();
+
+  return createEquipmentPurchaseRecord({
+    ...data,
+    id: snapshot.id,
+  });
+}
+
 function getAttendanceRecordId(studentId, date) {
   return `${studentId}_${date}`.replace(/\//g, "-");
 }
 
 function getFeeRecordId(studentId, month) {
   return `${studentId}_${month}`.replace(/\//g, "-");
+}
+
+function getEquipmentPurchaseId() {
+  return `equipment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function sortAttendanceRecords(records) {
@@ -85,6 +98,16 @@ function sortFeeRecords(records) {
     }
 
     return second.month.localeCompare(first.month);
+  });
+}
+
+function sortEquipmentPurchases(records) {
+  return [...records].sort((first, second) => {
+    if (first.purchaseDate === second.purchaseDate) {
+      return first.studentName.localeCompare(second.studentName);
+    }
+
+    return second.purchaseDate.localeCompare(first.purchaseDate);
   });
 }
 
@@ -186,6 +209,46 @@ export function upsertFeeRecord(records, nextRecord) {
 
   const nextRecords = records.filter((record) => record.id !== normalizedRecord.id);
   return sortFeeRecords([...nextRecords, normalizedRecord]);
+}
+
+export function createEquipmentPurchaseRecord(record) {
+  const studentId = String(record.studentId || "").trim();
+  const totalPrice = Math.max(Number(record.totalPrice ?? record.amount ?? 0) || 0, 0);
+  const paidAmount = Math.min(
+    Math.max(Number(record.paidAmount ?? record.amountPaid ?? 0) || 0, 0),
+    totalPrice,
+  );
+  const dueAmount = Math.max(totalPrice - paidAmount, 0);
+  const paymentStatus = dueAmount <= 0 ? "paid" : "pending";
+
+  return {
+    id: String(record.id || "").trim() || getEquipmentPurchaseId(),
+    itemName: String(record.itemName || "").trim(),
+    category: String(record.category || "").trim(),
+    studentId,
+    studentName: String(record.studentName || "").trim(),
+    totalPrice,
+    paidAmount,
+    dueAmount,
+    purchaseDate: record.purchaseDate || getLocalDateKey(),
+    paymentStatus,
+    notes: String(record.notes || "").trim(),
+    updatedBy: String(record.updatedBy || "").trim(),
+    timestamp: record.timestamp || null,
+    createdAt: record.createdAt || null,
+    updatedAt: record.updatedAt || null,
+  };
+}
+
+export function upsertEquipmentPurchaseRecord(records, nextRecord) {
+  const normalizedRecord = createEquipmentPurchaseRecord(nextRecord);
+
+  if (!normalizedRecord.id || !normalizedRecord.studentId || !normalizedRecord.itemName) {
+    return records;
+  }
+
+  const nextRecords = records.filter((record) => record.id !== normalizedRecord.id);
+  return sortEquipmentPurchases([...nextRecords, normalizedRecord]);
 }
 
 export function createStudentRecord(student) {
@@ -291,6 +354,23 @@ export function subscribeToFeeRecords(options, onRecords, onError) {
   );
 }
 
+export function subscribeToEquipmentPurchases(options, onRecords, onError) {
+  requireFirestore();
+
+  const purchasesCollection = collection(db, "equipmentPurchases");
+  const purchasesQuery = options?.studentId
+    ? query(purchasesCollection, where("studentId", "==", options.studentId))
+    : query(purchasesCollection);
+
+  return onSnapshot(
+    purchasesQuery,
+    (snapshot) => {
+      onRecords(sortEquipmentPurchases(snapshot.docs.map(normalizeEquipmentPurchaseSnapshot)));
+    },
+    onError,
+  );
+}
+
 export async function saveAttendanceRecord(record) {
   requireFirestore();
 
@@ -343,6 +423,49 @@ export async function saveFeeRecord(record) {
       dueAmount: normalizedRecord.dueAmount,
       status: normalizedRecord.status,
       paymentDate: normalizedRecord.paymentDate,
+      notes: normalizedRecord.notes,
+      updatedBy: normalizedRecord.updatedBy,
+      timestamp: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return normalizedRecord;
+}
+
+export async function saveEquipmentPurchaseRecord(record) {
+  requireFirestore();
+
+  const normalizedRecord = createEquipmentPurchaseRecord(record);
+
+  if (!normalizedRecord.studentId) {
+    throw new Error("Student is required for an equipment purchase.");
+  }
+
+  if (!normalizedRecord.itemName) {
+    throw new Error("Item name is required.");
+  }
+
+  if (!normalizedRecord.category) {
+    throw new Error("Category is required.");
+  }
+
+  if (normalizedRecord.totalPrice <= 0) {
+    throw new Error("Total price must be greater than zero.");
+  }
+
+  await setDoc(
+    doc(db, "equipmentPurchases", normalizedRecord.id),
+    {
+      itemName: normalizedRecord.itemName,
+      category: normalizedRecord.category,
+      studentId: normalizedRecord.studentId,
+      studentName: normalizedRecord.studentName,
+      totalPrice: normalizedRecord.totalPrice,
+      paidAmount: normalizedRecord.paidAmount,
+      dueAmount: normalizedRecord.dueAmount,
+      purchaseDate: normalizedRecord.purchaseDate,
+      paymentStatus: normalizedRecord.paymentStatus,
       notes: normalizedRecord.notes,
       updatedBy: normalizedRecord.updatedBy,
       timestamp: serverTimestamp(),

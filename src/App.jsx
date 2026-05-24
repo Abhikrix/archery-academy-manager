@@ -5,9 +5,11 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Download,
+  Package,
   Pencil,
   Search,
   Save,
+  ShoppingCart,
   TrendingUp,
   Trash2,
   UserPlus,
@@ -26,6 +28,7 @@ import { PERMISSIONS, ROLES } from "./constants/roles";
 import { useAuth } from "./context/AuthContext";
 import {
   createAttendanceRecord,
+  createEquipmentPurchaseRecord,
   createInitialAttendanceRecords,
   createInitialFeeRecords,
   createFeeRecord,
@@ -34,14 +37,17 @@ import {
   getInitialAcademySnapshot,
   removeStudentRecord,
   saveAttendanceRecord,
+  saveEquipmentPurchaseRecord,
   saveFeeRecord,
   saveStudentRecord,
   subscribeToAttendanceRecords,
+  subscribeToEquipmentPurchases,
   subscribeToFeeRecords,
   subscribeToStudentRecord,
   subscribeToStudentRecords,
   updateStudentRecord,
   upsertAttendanceRecord,
+  upsertEquipmentPurchaseRecord,
   upsertFeeRecord,
 } from "./services/academyService";
 import {
@@ -103,6 +109,19 @@ function getDefaultStudentAccountForm() {
   };
 }
 
+function getDefaultEquipmentForm() {
+  return {
+    id: "",
+    itemName: "",
+    category: "Bow",
+    studentId: "",
+    totalPrice: "",
+    paidAmount: "0",
+    purchaseDate: new Date().toISOString().slice(0, 10),
+    notes: "",
+  };
+}
+
 function getProfileStudentId(profile) {
   return profile?.uid || "";
 }
@@ -113,12 +132,13 @@ const roleViews = {
     "attendance",
     "attendance-history",
     "fees",
+    "equipment",
     "students",
     "reports",
     "users",
     "settings",
   ],
-  [ROLES.COACH]: ["attendance", "attendance-history", "fees", "students", "reports"],
+  [ROLES.COACH]: ["attendance", "attendance-history", "fees", "equipment", "students", "reports"],
   [ROLES.STUDENT]: ["overview"],
 };
 
@@ -130,29 +150,36 @@ function App() {
     createInitialAttendanceRecords(snapshot.students),
   );
   const [feeRecords, setFeeRecords] = useState(() => createInitialFeeRecords(snapshot.students));
+  const [equipmentPurchases, setEquipmentPurchases] = useState([]);
   const [attendanceDate, setAttendanceDate] = useState(getLocalDateKey);
   const [feeMonth, setFeeMonth] = useState(getLocalMonthKey);
   const [studentForm, setStudentForm] = useState(getDefaultStudentForm);
   const [studentAccountForm, setStudentAccountForm] = useState(getDefaultStudentAccountForm);
+  const [equipmentForm, setEquipmentForm] = useState(getDefaultEquipmentForm);
   const [userProfiles, setUserProfiles] = useState([]);
   const [userForm, setUserForm] = useState(getDefaultUserForm);
   const [editingStudentId, setEditingStudentId] = useState(null);
+  const [editingEquipmentPurchaseId, setEditingEquipmentPurchaseId] = useState(null);
   const [editingUserId, setEditingUserId] = useState(null);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [isLoadingFees, setIsLoadingFees] = useState(false);
+  const [isLoadingEquipment, setIsLoadingEquipment] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [isSavingEquipment, setIsSavingEquipment] = useState(false);
   const [isCreatingStudentAccount, setIsCreatingStudentAccount] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [studentError, setStudentError] = useState("");
   const [attendanceError, setAttendanceError] = useState("");
   const [feeError, setFeeError] = useState("");
+  const [equipmentError, setEquipmentError] = useState("");
   const [userError, setUserError] = useState("");
   const [studentNotice, setStudentNotice] = useState("");
   const [studentAccountError, setStudentAccountError] = useState("");
   const [studentAccountNotice, setStudentAccountNotice] = useState("");
   const [feeNotice, setFeeNotice] = useState("");
+  const [equipmentNotice, setEquipmentNotice] = useState("");
   const [userNotice, setUserNotice] = useState("");
   const usesFirestoreStudents = Boolean(isFirebaseConfigured && profile);
   const profileStudentId = profile?.role === ROLES.STUDENT ? getProfileStudentId(profile) : "";
@@ -245,6 +272,34 @@ function App() {
       (error) => {
         setFeeError(error.message);
         setIsLoadingFees(false);
+      },
+    );
+  }, [profile?.role, profileStudentId, usesFirestoreStudents]);
+
+  useEffect(() => {
+    if (!usesFirestoreStudents) {
+      setIsLoadingEquipment(false);
+      return undefined;
+    }
+
+    if (profile.role === ROLES.STUDENT && !profileStudentId) {
+      setEquipmentPurchases([]);
+      setIsLoadingEquipment(false);
+      return undefined;
+    }
+
+    setIsLoadingEquipment(true);
+
+    return subscribeToEquipmentPurchases(
+      profile.role === ROLES.STUDENT ? { studentId: profileStudentId } : {},
+      (nextRecords) => {
+        setEquipmentPurchases(nextRecords);
+        setEquipmentError("");
+        setIsLoadingEquipment(false);
+      },
+      (error) => {
+        setEquipmentError(error.message);
+        setIsLoadingEquipment(false);
       },
     );
   }, [profile?.role, profileStudentId, usesFirestoreStudents]);
@@ -377,6 +432,130 @@ function App() {
         ? `${nextRecord.studentName} marked paid locally.`
         : `${nextRecord.studentName} fee record saved locally.`,
     );
+  }
+
+  function resetEquipmentForm() {
+    setEditingEquipmentPurchaseId(null);
+    setEquipmentForm(getDefaultEquipmentForm());
+  }
+
+  function startEditingEquipmentPurchase(purchase) {
+    setEditingEquipmentPurchaseId(purchase.id);
+    setEquipmentError("");
+    setEquipmentNotice("");
+    setEquipmentForm({
+      id: purchase.id,
+      itemName: purchase.itemName,
+      category: purchase.category,
+      studentId: purchase.studentId,
+      totalPrice: String(purchase.totalPrice),
+      paidAmount: String(purchase.paidAmount),
+      purchaseDate: purchase.purchaseDate,
+      notes: purchase.notes || "",
+    });
+  }
+
+  async function submitEquipmentPurchaseForm(event) {
+    event.preventDefault();
+    setEquipmentError("");
+    setEquipmentNotice("");
+
+    const student = students.find((record) => record.id === equipmentForm.studentId);
+    const totalPrice = Number(equipmentForm.totalPrice);
+    const paidAmount = Number(equipmentForm.paidAmount || 0);
+
+    if (!student) {
+      setEquipmentError("Select a student for this purchase.");
+      return;
+    }
+
+    if (!equipmentForm.itemName.trim()) {
+      setEquipmentError("Item name is required.");
+      return;
+    }
+
+    if (!equipmentForm.category.trim()) {
+      setEquipmentError("Category is required.");
+      return;
+    }
+
+    if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+      setEquipmentError("Total price must be greater than zero.");
+      return;
+    }
+
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+      setEquipmentError("Paid amount cannot be negative.");
+      return;
+    }
+
+    const nextPurchase = createEquipmentPurchaseRecord({
+      ...equipmentForm,
+      id: editingEquipmentPurchaseId || equipmentForm.id,
+      studentName: student.name,
+      totalPrice,
+      paidAmount,
+      updatedBy: profile?.name || profile?.email || profile?.uid || "Local user",
+    });
+
+    setIsSavingEquipment(true);
+
+    if (usesFirestoreStudents) {
+      try {
+        await saveEquipmentPurchaseRecord(nextPurchase);
+        setEquipmentNotice(
+          `${nextPurchase.itemName} saved for ${student.name}. ${formatCurrency(
+            nextPurchase.dueAmount,
+          )} due.`,
+        );
+        resetEquipmentForm();
+      } catch (error) {
+        setEquipmentError(error.message);
+      } finally {
+        setIsSavingEquipment(false);
+      }
+      return;
+    }
+
+    setEquipmentPurchases((currentPurchases) =>
+      upsertEquipmentPurchaseRecord(currentPurchases, nextPurchase),
+    );
+    setEquipmentNotice(`${nextPurchase.itemName} saved locally for ${student.name}.`);
+    resetEquipmentForm();
+    setIsSavingEquipment(false);
+  }
+
+  async function markEquipmentPaymentReceived(purchaseId) {
+    setEquipmentError("");
+    setEquipmentNotice("");
+
+    const purchase = equipmentPurchases.find((record) => record.id === purchaseId);
+
+    if (!purchase) {
+      setEquipmentError("Purchase record was not found.");
+      return;
+    }
+
+    const nextPurchase = createEquipmentPurchaseRecord({
+      ...purchase,
+      paidAmount: purchase.totalPrice,
+      updatedBy: profile?.name || profile?.email || profile?.uid || "Local user",
+    });
+
+    if (usesFirestoreStudents) {
+      try {
+        await saveEquipmentPurchaseRecord(nextPurchase);
+        setEquipmentNotice(`${purchase.itemName} marked paid for ${purchase.studentName}.`);
+      } catch (error) {
+        setEquipmentError(error.message);
+      }
+      return;
+    }
+
+    setEquipmentPurchases((currentPurchases) =>
+      upsertEquipmentPurchaseRecord(currentPurchases, nextPurchase),
+    );
+    setEquipmentNotice(`${purchase.itemName} marked paid locally.`);
   }
 
   function startEditing(student) {
@@ -558,17 +737,24 @@ function App() {
               feeMonth={feeMonth}
               feeNotice={feeNotice}
               feeRecords={feeRecords}
+              equipmentError={equipmentError}
+              equipmentForm={equipmentForm}
+              equipmentNotice={equipmentNotice}
+              equipmentPurchases={equipmentPurchases}
               userProfiles={userProfiles}
               studentAccountForm={studentAccountForm}
               studentForm={studentForm}
               userForm={userForm}
+              editingEquipmentPurchaseId={editingEquipmentPurchaseId}
               editingStudentId={editingStudentId}
               editingUserId={editingUserId}
               isLoadingAttendance={isLoadingAttendance}
+              isLoadingEquipment={isLoadingEquipment}
               isLoadingFees={isLoadingFees}
               isLoadingStudents={isLoadingStudents}
               isLoadingUsers={isLoadingUsers}
               isCreatingStudentAccount={isCreatingStudentAccount}
+              isSavingEquipment={isSavingEquipment}
               isSavingStudent={isSavingStudent}
               isSavingUser={isSavingUser}
               studentError={studentError}
@@ -581,7 +767,9 @@ function App() {
               onAttendanceDateChange={setAttendanceDate}
               onFeeMonthChange={setFeeMonth}
               onMarkAll={updateAllAttendance}
+              onSubmitEquipmentPurchase={submitEquipmentPurchaseForm}
               onUpdateFeeStatus={updateFeeStatus}
+              onUpdateEquipmentForm={setEquipmentForm}
               onFormChange={setStudentForm}
               onStudentAccountFormChange={setStudentAccountForm}
               onUserFormChange={setUserForm}
@@ -589,9 +777,12 @@ function App() {
               onSubmitStudentAccount={submitStudentAccountForm}
               onSubmitUser={submitUserForm}
               onCancelStudent={resetStudentForm}
+              onCancelEquipment={resetEquipmentForm}
               onCancelUser={resetUserForm}
+              onEditEquipmentPurchase={startEditingEquipmentPurchase}
               onEditStudent={startEditing}
               onEditUser={startEditingUser}
+              onMarkEquipmentPaid={markEquipmentPaymentReceived}
               onDeleteStudent={deleteStudent}
               onDeleteUser={deleteUser}
             />
@@ -614,14 +805,26 @@ function App() {
               feeMonth={feeMonth}
               feeNotice={feeNotice}
               feeRecords={feeRecords}
+              equipmentError={equipmentError}
+              equipmentForm={equipmentForm}
+              equipmentNotice={equipmentNotice}
+              equipmentPurchases={equipmentPurchases}
               userProfiles={userProfiles}
+              editingEquipmentPurchaseId={editingEquipmentPurchaseId}
               isLoadingAttendance={isLoadingAttendance}
+              isLoadingEquipment={isLoadingEquipment}
               isLoadingFees={isLoadingFees}
+              isSavingEquipment={isSavingEquipment}
               onAttendanceChange={updateAttendance}
               onAttendanceDateChange={setAttendanceDate}
               onFeeMonthChange={setFeeMonth}
               onMarkAll={updateAllAttendance}
+              onSubmitEquipmentPurchase={submitEquipmentPurchaseForm}
               onUpdateFeeStatus={updateFeeStatus}
+              onUpdateEquipmentForm={setEquipmentForm}
+              onCancelEquipment={resetEquipmentForm}
+              onEditEquipmentPurchase={startEditingEquipmentPurchase}
+              onMarkEquipmentPaid={markEquipmentPaymentReceived}
             />
           }
         />
@@ -637,8 +840,11 @@ function App() {
                 attendanceError={attendanceError}
                 feeRecords={feeRecords}
                 feeError={feeError}
+                equipmentPurchases={equipmentPurchases}
+                equipmentError={equipmentError}
                 batches={snapshot.batches}
                 isLoadingAttendance={isLoadingAttendance}
+                isLoadingEquipment={isLoadingEquipment}
                 isLoadingFees={isLoadingFees}
                 isLoadingStudents={isLoadingStudents}
                 studentError={studentError}
@@ -705,6 +911,10 @@ function ManagementPortal({
   attendanceDate,
   attendanceError,
   attendanceRecords,
+  equipmentError,
+  equipmentForm,
+  equipmentNotice,
+  equipmentPurchases,
   feeError,
   feeMonth,
   feeNotice,
@@ -713,13 +923,16 @@ function ManagementPortal({
   studentAccountForm,
   studentForm,
   userForm,
+  editingEquipmentPurchaseId,
   editingStudentId,
   editingUserId,
   isLoadingAttendance,
+  isLoadingEquipment,
   isLoadingFees,
   isLoadingStudents,
   isLoadingUsers,
   isCreatingStudentAccount,
+  isSavingEquipment,
   isSavingStudent,
   isSavingUser,
   studentAccountError,
@@ -730,9 +943,14 @@ function ManagementPortal({
   userNotice,
   onAttendanceChange,
   onAttendanceDateChange,
+  onCancelEquipment,
   onFeeMonthChange,
+  onEditEquipmentPurchase,
+  onMarkEquipmentPaid,
   onMarkAll,
+  onSubmitEquipmentPurchase,
   onUpdateFeeStatus,
+  onUpdateEquipmentForm,
   onFormChange,
   onStudentAccountFormChange,
   onUserFormChange,
@@ -756,7 +974,14 @@ function ManagementPortal({
     return <Navigate to={getRoleHomePath(role)} replace />;
   }
 
-  const metrics = getMetrics(students, attendanceRecords, feeRecords, getLocalDateKey(), getLocalMonthKey());
+  const metrics = getMetrics(
+    students,
+    attendanceRecords,
+    feeRecords,
+    equipmentPurchases,
+    getLocalDateKey(),
+    getLocalMonthKey(),
+  );
   const navigation = buildNavigation(role, permissions);
 
   async function handleLogout() {
@@ -779,6 +1004,7 @@ function ManagementPortal({
       {activeView === "dashboard" && role === ROLES.ADMIN && (
         <DashboardOverview
           attendanceRecords={attendanceRecords}
+          equipmentPurchases={equipmentPurchases}
           feeRecords={feeRecords}
           metrics={metrics}
           students={students}
@@ -817,6 +1043,24 @@ function ManagementPortal({
           isLoadingFees={isLoadingFees}
           onFeeMonthChange={onFeeMonthChange}
           onUpdateFeeStatus={onUpdateFeeStatus}
+        />
+      )}
+      {activeView === "equipment" && permissions.canManageEquipment && (
+        <EquipmentPurchasesView
+          batches={batches}
+          editingPurchaseId={editingEquipmentPurchaseId}
+          equipmentError={equipmentError}
+          equipmentForm={equipmentForm}
+          equipmentNotice={equipmentNotice}
+          equipmentPurchases={equipmentPurchases}
+          isLoadingEquipment={isLoadingEquipment}
+          isSavingEquipment={isSavingEquipment}
+          onCancel={onCancelEquipment}
+          onEdit={onEditEquipmentPurchase}
+          onFormChange={onUpdateEquipmentForm}
+          onMarkPaid={onMarkEquipmentPaid}
+          onSubmit={onSubmitEquipmentPurchase}
+          students={students}
         />
       )}
       {activeView === "students" && permissions.canViewStudents && (
@@ -880,9 +1124,12 @@ function StudentPortal({
   attendanceRecords,
   attendanceError,
   batches,
+  equipmentPurchases,
+  equipmentError,
   feeRecords,
   feeError,
   isLoadingAttendance,
+  isLoadingEquipment,
   isLoadingFees,
   isLoadingStudents,
   studentError,
@@ -926,9 +1173,11 @@ function StudentPortal({
           attendanceRecords={attendanceRecords}
           attendanceError={attendanceError}
           batches={batches}
+          equipmentPurchases={equipmentPurchases}
+          equipmentError={equipmentError}
           feeRecords={feeRecords}
           feeError={feeError}
-          isLoading={isLoadingStudents || isLoadingAttendance || isLoadingFees}
+          isLoading={isLoadingStudents || isLoadingAttendance || isLoadingFees || isLoadingEquipment}
           student={student}
           studentError={studentError}
           studentId={studentId}
@@ -944,6 +1193,7 @@ function buildNavigation(role, permissions) {
       { id: "attendance", label: "Attendance" },
       { id: "attendance-history", label: "History" },
       { id: "fees", label: "Fees" },
+      { id: "equipment", label: "Equipment" },
       { id: "students", label: "Students" },
       { id: "reports", label: "Reports" },
     ];
@@ -954,6 +1204,7 @@ function buildNavigation(role, permissions) {
     { id: "attendance", label: "Attendance" },
     { id: "attendance-history", label: "History" },
     { id: "fees", label: "Fees" },
+    { id: "equipment", label: "Equipment" },
   ];
 
   if (permissions.canViewStudents) {
@@ -975,7 +1226,7 @@ function buildNavigation(role, permissions) {
   return items;
 }
 
-function getMetrics(students, attendanceRecords, feeRecords, todayDate, month) {
+function getMetrics(students, attendanceRecords, feeRecords, equipmentPurchases, todayDate, month) {
   const activeStudentIds = new Set(students.map((student) => student.id));
   const presentToday = attendanceRecords.filter(
     (record) =>
@@ -985,6 +1236,8 @@ function getMetrics(students, attendanceRecords, feeRecords, todayDate, month) {
   ).length;
   const feeRows = getMonthlyFeeRows(students, feeRecords, month);
   const feeSummary = getFeeSummary(feeRows);
+  const equipmentSummary = getEquipmentSummary(equipmentPurchases);
+  const recentEquipmentPurchases = getRecentEquipmentPurchases(equipmentPurchases);
 
   return {
     totalStudents: students.length,
@@ -996,6 +1249,9 @@ function getMetrics(students, attendanceRecords, feeRecords, todayDate, month) {
     monthlyCollectionSummary: `${formatCurrency(feeSummary.monthlyIncome)} / ${formatCurrency(
       feeSummary.expectedTotal,
     )}`,
+    equipmentSales: equipmentSummary.totalSales,
+    pendingEquipmentDues: equipmentSummary.pendingDues,
+    recentEquipmentPurchases,
   };
 }
 
@@ -1051,6 +1307,37 @@ function getFeeHistoryRows(students, feeRecords) {
     studentName:
       record.studentName || students.find((student) => student.id === record.studentId)?.name || record.studentId,
   }));
+}
+
+function getEquipmentSummary(purchases) {
+  return purchases.reduce(
+    (summary, purchase) => ({
+      totalSales: summary.totalSales + purchase.paidAmount,
+      pendingDues: summary.pendingDues + purchase.dueAmount,
+      pendingCount: summary.pendingCount + (purchase.dueAmount > 0 ? 1 : 0),
+      paidCount: summary.paidCount + (purchase.paymentStatus === "paid" ? 1 : 0),
+      totalValue: summary.totalValue + purchase.totalPrice,
+    }),
+    {
+      totalSales: 0,
+      pendingDues: 0,
+      pendingCount: 0,
+      paidCount: 0,
+      totalValue: 0,
+    },
+  );
+}
+
+function getRecentEquipmentPurchases(purchases, count = 5) {
+  return [...purchases]
+    .sort((first, second) => {
+      if (first.purchaseDate === second.purchaseDate) {
+        return second.id.localeCompare(first.id);
+      }
+
+      return second.purchaseDate.localeCompare(first.purchaseDate);
+    })
+    .slice(0, count);
 }
 
 function getPercentage(value, total) {
@@ -1281,9 +1568,10 @@ function LoadingScreen() {
   );
 }
 
-function DashboardOverview({ attendanceRecords, feeRecords, metrics, students, batches }) {
+function DashboardOverview({ attendanceRecords, equipmentPurchases, feeRecords, metrics, students, batches }) {
   const recentStudents = students.slice(0, 4);
   const todayDate = getLocalDateKey();
+  const recentEquipmentPurchases = metrics.recentEquipmentPurchases || getRecentEquipmentPurchases(equipmentPurchases);
 
   return (
     <div className="space-y-8">
@@ -1319,6 +1607,12 @@ function DashboardOverview({ attendanceRecords, feeRecords, metrics, students, b
             label="Monthly income"
             value={formatCurrency(metrics.monthlyIncome)}
             helper={metrics.monthlyCollectionSummary}
+          />
+          <DashboardCard
+            icon={Package}
+            label="Equipment sales"
+            value={formatCurrency(metrics.equipmentSales)}
+            helper={`${formatCurrency(metrics.pendingEquipmentDues)} equipment dues`}
           />
         </div>
       </section>
@@ -1361,6 +1655,55 @@ function DashboardOverview({ attendanceRecords, feeRecords, metrics, students, b
             );
           })}
         </div>
+      </section>
+
+      <section>
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="section-title">Equipment</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">Recent purchases</h2>
+          </div>
+          <p className="text-sm text-neutral-400">{equipmentPurchases.length} purchase records</p>
+        </div>
+
+        {recentEquipmentPurchases.length === 0 ? (
+          <div className="surface mt-4 p-4 text-sm text-neutral-400">
+            No equipment purchases have been recorded yet.
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {recentEquipmentPurchases.map((purchase) => (
+              <article key={purchase.id} className="surface p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                      {purchase.category}
+                    </p>
+                    <h3 className="mt-2 font-semibold text-white">{purchase.itemName}</h3>
+                    <p className="mt-1 text-sm text-neutral-400">
+                      {purchase.studentName || purchase.studentId}
+                    </p>
+                  </div>
+                  <FeeStatusBadge status={purchase.paymentStatus} />
+                </div>
+                <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <dt className="text-neutral-500">Paid</dt>
+                    <dd className="mt-1 text-white">{formatCurrency(purchase.paidAmount)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Due</dt>
+                    <dd className="mt-1 text-white">{formatCurrency(purchase.dueAmount)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Date</dt>
+                    <dd className="mt-1 text-white">{formatDate(purchase.purchaseDate)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -1926,6 +2269,328 @@ function FeesView({
             )}
           </section>
         </>
+      )}
+    </div>
+  );
+}
+
+function EquipmentPurchasesView({
+  batches,
+  editingPurchaseId,
+  equipmentError,
+  equipmentForm,
+  equipmentNotice,
+  equipmentPurchases,
+  isLoadingEquipment,
+  isSavingEquipment,
+  onCancel,
+  onEdit,
+  onFormChange,
+  onMarkPaid,
+  onSubmit,
+  students,
+}) {
+  const [purchaseSearch, setPurchaseSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const summary = getEquipmentSummary(equipmentPurchases);
+  const selectedStudent = students.find((student) => student.id === equipmentForm.studentId);
+  const formTotalPrice = Math.max(Number(equipmentForm.totalPrice || 0) || 0, 0);
+  const formPaidAmount = Math.min(
+    Math.max(Number(equipmentForm.paidAmount || 0) || 0, 0),
+    formTotalPrice,
+  );
+  const formDueAmount = Math.max(formTotalPrice - formPaidAmount, 0);
+  const normalizedSearch = purchaseSearch.trim().toLowerCase();
+  const filteredPurchases = equipmentPurchases.filter((purchase) => {
+    const student = students.find((record) => record.id === purchase.studentId);
+    const batch = getBatchById(batches, student?.batchId);
+    const searchText = `${purchase.itemName} ${purchase.category} ${purchase.studentName} ${purchase.studentId} ${batch?.name || ""}`.toLowerCase();
+    const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
+    const matchesStatus = statusFilter === "all" || purchase.paymentStatus === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  function updateForm(patch) {
+    onFormChange((currentForm) => ({
+      ...currentForm,
+      ...patch,
+    }));
+  }
+
+  function updatePaidAmount(value) {
+    const nextPaidAmount = Math.min(
+      Math.max(Number(value || 0) || 0, 0),
+      Math.max(Number(equipmentForm.totalPrice || 0) || 0, 0),
+    );
+
+    updateForm({ paidAmount: String(nextPaidAmount) });
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="section-title">Equipment</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Purchase management</h2>
+          <p className="mt-2 text-sm text-neutral-400">
+            Track academy equipment sales, payments, and pending balances.
+          </p>
+        </div>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardCard
+          icon={Package}
+          label="Total equipment sales"
+          value={formatCurrency(summary.totalSales)}
+          helper={`${formatCurrency(summary.totalValue)} total purchase value`}
+        />
+        <DashboardCard
+          icon={ClipboardCheck}
+          label="Pending balances"
+          value={formatCurrency(summary.pendingDues)}
+          helper={`${summary.pendingCount} open purchase records`}
+        />
+        <DashboardCard
+          icon={CircleDollarSign}
+          label="Paid purchases"
+          value={`${summary.paidCount}/${equipmentPurchases.length}`}
+          helper="Equipment payment status"
+        />
+        <DashboardCard
+          icon={ShoppingCart}
+          label="Recent purchases"
+          value={equipmentPurchases.length}
+          helper="All equipment records"
+        />
+      </div>
+
+      <form className="surface grid gap-4 p-4 xl:grid-cols-6" onSubmit={onSubmit}>
+        <div className="xl:col-span-6">
+          <p className="section-title">{editingPurchaseId ? "Edit purchase" : "Add purchase"}</p>
+        </div>
+        <label className="block xl:col-span-2">
+          <span className="mb-2 block text-sm text-neutral-400">Item name</span>
+          <input
+            className="field w-full"
+            value={equipmentForm.itemName}
+            onChange={(event) => updateForm({ itemName: event.target.value })}
+            placeholder="Carbon arrow set"
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Category</span>
+          <select
+            className="field w-full"
+            value={equipmentForm.category}
+            onChange={(event) => updateForm({ category: event.target.value })}
+          >
+            <option>Bow</option>
+            <option>Arrows</option>
+            <option>String</option>
+            <option>Safety Gear</option>
+            <option>Target</option>
+            <option>Accessory</option>
+          </select>
+        </label>
+        <label className="block xl:col-span-2">
+          <span className="mb-2 block text-sm text-neutral-400">Student</span>
+          <select
+            className="field w-full"
+            value={equipmentForm.studentId}
+            onChange={(event) => updateForm({ studentId: event.target.value })}
+            required
+          >
+            <option value="">Select student</option>
+            {students.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.name} - {student.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Purchase date</span>
+          <input
+            className="field w-full"
+            type="date"
+            value={equipmentForm.purchaseDate}
+            onChange={(event) => updateForm({ purchaseDate: event.target.value })}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Total price</span>
+          <input
+            className="field w-full"
+            type="number"
+            min="0"
+            step="1"
+            value={equipmentForm.totalPrice}
+            onChange={(event) => updateForm({ totalPrice: event.target.value })}
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Paid amount</span>
+          <input
+            className="field w-full"
+            type="number"
+            min="0"
+            max={formTotalPrice}
+            step="1"
+            value={equipmentForm.paidAmount}
+            onChange={(event) => updatePaidAmount(event.target.value)}
+          />
+        </label>
+        <div className="surface border-white/10 bg-black/30 p-3">
+          <p className="text-sm text-neutral-500">Due amount</p>
+          <p className="mt-2 font-semibold text-white">{formatCurrency(formDueAmount)}</p>
+        </div>
+        <div className="surface border-white/10 bg-black/30 p-3">
+          <p className="text-sm text-neutral-500">Payment status</p>
+          <div className="mt-2">
+            <FeeStatusBadge status={formDueAmount <= 0 && formTotalPrice > 0 ? "paid" : "pending"} />
+          </div>
+        </div>
+        <label className="block xl:col-span-2">
+          <span className="mb-2 block text-sm text-neutral-400">Payment notes</span>
+          <input
+            className="field w-full"
+            value={equipmentForm.notes}
+            onChange={(event) => updateForm({ notes: event.target.value })}
+            placeholder="Advance, UPI ref, receipt note"
+          />
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row xl:col-span-6">
+          <button type="submit" className="gold-button min-h-11" disabled={isSavingEquipment}>
+            <Save size={16} />
+            {isSavingEquipment ? "Saving..." : editingPurchaseId ? "Update purchase" : "Add purchase"}
+          </button>
+          {editingPurchaseId && (
+            <button type="button" className="ghost-button min-h-11" onClick={onCancel}>
+              Cancel edit
+            </button>
+          )}
+          {selectedStudent && (
+            <p className="self-center text-sm text-neutral-400">
+              Batch: {getBatchById(batches, selectedStudent.batchId)?.name || "Not assigned"}
+            </p>
+          )}
+        </div>
+      </form>
+
+      <section className="surface grid gap-3 p-4 lg:grid-cols-[1fr_180px] lg:items-end">
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Search purchases</span>
+          <span className="relative block">
+            <Search
+              size={18}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
+            />
+            <input
+              className="field w-full pl-10"
+              placeholder="Search by item, category, student, or batch"
+              value={purchaseSearch}
+              onChange={(event) => setPurchaseSearch(event.target.value)}
+            />
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Status</span>
+          <select
+            className="field w-full"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+          </select>
+        </label>
+      </section>
+
+      {(equipmentError || equipmentNotice) && (
+        <p
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            equipmentError
+              ? "border-rose-400/30 bg-rose-400/10 text-rose-100"
+              : "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+          }`}
+        >
+          {equipmentError || equipmentNotice}
+        </p>
+      )}
+
+      {isLoadingEquipment ? (
+        <div className="surface p-4 text-sm text-neutral-400">Loading equipment purchases...</div>
+      ) : filteredPurchases.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">
+          No equipment purchase records match the current filters.
+        </div>
+      ) : (
+        <div className="surface overflow-hidden">
+          <div className="hidden grid-cols-[1fr_0.8fr_1fr_0.65fr_0.65fr_0.65fr_0.75fr_0.9fr] gap-4 border-b border-white/10 px-4 py-3 text-xs uppercase tracking-[0.18em] text-neutral-500 xl:grid">
+            <span>Item</span>
+            <span>Category</span>
+            <span>Student</span>
+            <span>Total</span>
+            <span>Paid</span>
+            <span>Due</span>
+            <span>Status</span>
+            <span>Actions</span>
+          </div>
+          <div className="divide-y divide-white/5">
+            {filteredPurchases.map((purchase) => {
+              const student = students.find((record) => record.id === purchase.studentId);
+              const batch = getBatchById(batches, student?.batchId);
+
+              return (
+                <article
+                  key={purchase.id}
+                  className="grid gap-3 px-4 py-4 xl:grid-cols-[1fr_0.8fr_1fr_0.65fr_0.65fr_0.65fr_0.75fr_0.9fr] xl:items-center"
+                >
+                  <div>
+                    <p className="font-medium text-white">{purchase.itemName}</p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      {formatDate(purchase.purchaseDate)}
+                    </p>
+                  </div>
+                  <p className="text-sm text-neutral-300">{purchase.category}</p>
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {purchase.studentName || purchase.studentId}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {batch?.name || purchase.studentId}
+                    </p>
+                  </div>
+                  <p className="text-sm text-white">{formatCurrency(purchase.totalPrice)}</p>
+                  <p className="text-sm text-white">{formatCurrency(purchase.paidAmount)}</p>
+                  <p className="text-sm font-medium text-white">
+                    {formatCurrency(purchase.dueAmount)}
+                  </p>
+                  <FeeStatusBadge status={purchase.paymentStatus} />
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <button type="button" className="ghost-button min-h-10" onClick={() => onEdit(purchase)}>
+                      <Pencil size={16} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="gold-button min-h-10 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={purchase.dueAmount <= 0}
+                      onClick={() => onMarkPaid(purchase.id)}
+                    >
+                      Mark paid
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

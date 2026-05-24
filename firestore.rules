@@ -221,6 +221,58 @@ service cloud.firestore {
         && studentExists(request.resource.data.studentId);
     }
 
+    function validEquipmentPurchaseRecord() {
+      return request.resource.data.keys().hasAll([
+          'itemName',
+          'category',
+          'studentId',
+          'studentName',
+          'totalPrice',
+          'paidAmount',
+          'dueAmount',
+          'purchaseDate',
+          'paymentStatus',
+          'notes',
+          'updatedBy',
+          'timestamp'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'itemName',
+          'category',
+          'studentId',
+          'studentName',
+          'totalPrice',
+          'paidAmount',
+          'dueAmount',
+          'purchaseDate',
+          'paymentStatus',
+          'notes',
+          'updatedBy',
+          'timestamp'
+        ])
+        && request.resource.data.itemName is string
+        && request.resource.data.category is string
+        && request.resource.data.studentId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.totalPrice is number
+        && request.resource.data.paidAmount is number
+        && request.resource.data.dueAmount is number
+        && request.resource.data.totalPrice > 0
+        && request.resource.data.paidAmount >= 0
+        && request.resource.data.paidAmount <= request.resource.data.totalPrice
+        && request.resource.data.dueAmount == request.resource.data.totalPrice - request.resource.data.paidAmount
+        && request.resource.data.paymentStatus in ['paid', 'pending']
+        && (
+          (request.resource.data.paymentStatus == 'paid' && request.resource.data.dueAmount == 0)
+          || (request.resource.data.paymentStatus == 'pending' && request.resource.data.dueAmount > 0)
+        )
+        && request.resource.data.purchaseDate is string
+        && request.resource.data.notes is string
+        && request.resource.data.updatedBy is string
+        && request.resource.data.timestamp == request.time
+        && studentExists(request.resource.data.studentId);
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
 
@@ -283,6 +335,17 @@ service cloud.firestore {
         && validFeeRecord(recordId)
         && request.resource.data.studentId == resource.data.studentId
         && request.resource.data.month == resource.data.month;
+
+      allow delete: if isAdmin();
+    }
+
+    match /equipmentPurchases/{purchaseId} {
+      allow read: if isStaff() || isOwnStudentRecord(resource.data.studentId);
+
+      allow create: if isStaff() && validEquipmentPurchaseRecord();
+
+      allow update: if isStaff()
+        && validEquipmentPurchaseRecord();
 
       allow delete: if isAdmin();
     }
