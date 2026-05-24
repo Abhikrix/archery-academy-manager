@@ -15,10 +15,14 @@ import { getLocalDateKey, getLocalMonthKey } from "../utils/formatters";
 
 const defaultStudentValues = {
   parentName: "",
+  parentPhone: "",
   parentPhoneNumber: "",
+  studentPhone: "",
   studentPhoneNumber: "",
   joinDate: "",
   feeStatus: "pending",
+  monthlyFee: 0,
+  pendingFees: 0,
   attendanceStatus: "present",
   attendanceRate: 0,
 };
@@ -185,16 +189,30 @@ export function upsertFeeRecord(records, nextRecord) {
 }
 
 export function createStudentRecord(student) {
+  const id = String(student.id || student.uid || student.studentId || "").trim();
+  const feeAmount = Number(student.feeAmount ?? student.monthlyFee ?? 0);
+  const parentPhone = String(student.parentPhone || student.parentPhoneNumber || "").trim();
+  const studentPhone = String(
+    student.studentPhone || student.studentPhoneNumber || student.phoneNumber || "",
+  ).trim();
+  const batchId = student.batchId || student.batch || batches[0]?.id || "";
+
   return {
     ...defaultStudentValues,
     ...student,
-    id: String(student.id || "").trim(),
+    id,
+    studentId: String(student.studentId || id).trim(),
     name: String(student.name || "").trim(),
     parentName: String(student.parentName || "").trim(),
-    parentPhoneNumber: String(student.parentPhoneNumber || "").trim(),
-    studentPhoneNumber: String(student.studentPhoneNumber || student.phoneNumber || "").trim(),
-    batchId: student.batchId || batches[0]?.id || "",
-    feeAmount: Number(student.feeAmount || 0),
+    parentPhone,
+    parentPhoneNumber: parentPhone,
+    studentPhone,
+    studentPhoneNumber: studentPhone,
+    batch: batchId,
+    batchId,
+    feeAmount,
+    monthlyFee: Number(student.monthlyFee ?? feeAmount),
+    pendingFees: Number(student.pendingFees ?? 0),
     joinDate: student.joinDate || "",
   };
 }

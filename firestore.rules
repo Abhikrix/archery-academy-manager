@@ -39,9 +39,7 @@ service cloud.firestore {
     }
 
     function linkedStudentId() {
-      return currentUserProfile().keys().hasAny(['studentId'])
-        ? currentUserProfile().studentId
-        : request.auth.uid;
+      return request.auth.uid;
     }
 
     function isOwnStudentRecord(studentId) {
@@ -79,11 +77,17 @@ service cloud.firestore {
     function validStudentRecord(studentId) {
       return request.resource.data.keys().hasAll([
           'id',
+          'studentId',
           'name',
+          'batch',
           'parentName',
+          'parentPhone',
           'parentPhoneNumber',
+          'studentPhone',
           'studentPhoneNumber',
           'batchId',
+          'monthlyFee',
+          'pendingFees',
           'feeAmount',
           'joinDate',
           'feeStatus',
@@ -94,11 +98,17 @@ service cloud.firestore {
         ])
         && request.resource.data.keys().hasOnly([
           'id',
+          'studentId',
           'name',
+          'batch',
           'parentName',
+          'parentPhone',
           'parentPhoneNumber',
+          'studentPhone',
           'studentPhoneNumber',
           'batchId',
+          'monthlyFee',
+          'pendingFees',
           'feeAmount',
           'joinDate',
           'feeStatus',
@@ -108,13 +118,25 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.id == studentId
+        && request.resource.data.studentId == studentId
         && request.resource.data.name is string
+        && request.resource.data.batch is string
         && request.resource.data.parentName is string
+        && request.resource.data.parentPhone is string
         && request.resource.data.parentPhoneNumber is string
+        && request.resource.data.studentPhone is string
         && request.resource.data.studentPhoneNumber is string
         && request.resource.data.batchId is string
+        && request.resource.data.batch == request.resource.data.batchId
         && request.resource.data.feeAmount is number
         && request.resource.data.feeAmount >= 0
+        && request.resource.data.monthlyFee is number
+        && request.resource.data.monthlyFee >= 0
+        && request.resource.data.monthlyFee == request.resource.data.feeAmount
+        && request.resource.data.pendingFees is number
+        && request.resource.data.pendingFees >= 0
+        && request.resource.data.parentPhone == request.resource.data.parentPhoneNumber
+        && request.resource.data.studentPhone == request.resource.data.studentPhoneNumber
         && request.resource.data.joinDate is string
         && request.resource.data.feeStatus in ['paid', 'pending']
         && request.resource.data.attendanceStatus in ['present', 'absent']

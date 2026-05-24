@@ -1,5 +1,5 @@
 export function formatCurrency(amount) {
-  return `INR ${amount.toLocaleString("en-IN")}`;
+  return `INR ${Number(amount || 0).toLocaleString("en-IN")}`;
 }
 
 export function formatDate(value) {
@@ -7,11 +7,17 @@ export function formatDate(value) {
     return "Not added";
   }
 
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not added";
+  }
+
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
+  }).format(date);
 }
 
 export function getLocalDateKey(date = new Date()) {
@@ -28,10 +34,16 @@ export function formatMonth(value) {
     return "Not added";
   }
 
+  const date = new Date(`${value}-01T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not added";
+  }
+
   return new Intl.DateTimeFormat("en-IN", {
     month: "short",
     year: "numeric",
-  }).format(new Date(`${value}-01T00:00:00`));
+  }).format(date);
 }
 
 export function getBatchById(batches, batchId) {

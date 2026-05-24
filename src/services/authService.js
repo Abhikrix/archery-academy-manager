@@ -14,7 +14,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { auth, db, isFirebaseConfigured } from "../config/firebase";
+import { auth, db, firebaseApiKey, isFirebaseConfigured } from "../config/firebase";
 import { ROLES } from "../constants/roles";
 
 const allowedRoles = new Set(Object.values(ROLES));
@@ -51,6 +51,7 @@ async function createDefaultUserProfile(userRef, user) {
     name: user.displayName || user.email || "Academy user",
     email: user.email || "",
     role: ROLES.STUDENT,
+    studentId: user.uid,
     createdAt: serverTimestamp(),
   };
 
@@ -65,12 +66,14 @@ async function createDefaultUserProfile(userRef, user) {
 function normalizeUserProfile(snapshot) {
   const data = snapshot.data();
 
+  const role = allowedRoles.has(data.role) ? data.role : ROLES.STUDENT;
+
   return {
     uid: data.uid || snapshot.id,
     name: data.name || data.email || "Academy user",
     email: data.email || "",
-    role: allowedRoles.has(data.role) ? data.role : ROLES.STUDENT,
-    studentId: data.studentId || "",
+    role,
+    studentId: role === ROLES.STUDENT ? data.studentId || data.uid || snapshot.id : "",
     createdAt: data.createdAt || null,
   };
 }
@@ -159,4 +162,156 @@ export async function saveUserProfile(profile) {
 export async function deleteUserProfile(uid) {
   requireFirebase();
   await deleteDoc(doc(db, "users", uid));
+}
+
+function getIdentityToolkitErrorMessage(code) {
+  const messages = {
+    EMAIL_EXISTS: "A Firebase Auth user already exists with this email.",
+    INVALID_EMAIL: "Enter a valid student email address.",
+    MISSING_PASSWORD: "Student password is required.",
+    WEAK_PASSWORD: "Use a stronger password with at least 6 characters.",
+    OPERATION_NOT_ALLOWED: "Enable Email/Password sign-in in Firebase Authentication first.",
+  };
+
+  return messages[code] || code || "Firebase Authentication could not create this student.";
+}
+
+async function createStudentAuthUser(email, password) {
+  if (!firebaseApiKey) {
+    throw new Error("Firebase API key is missing. Check VITE_FIREBASE_API_KEY.");
+  }
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        returnSecureToken: true,
+      }),
+    },
+  );
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(getIdentityToolkitErrorMessage(payload?.error?.message));
+  }
+
+  return {
+    idToken: payload.idToken,
+    uid: payload.localId,
+  };
+}
+
+async function rollbackStudentAuthUser(idToken) {
+  if (!idToken || !firebaseApiKey) {
+    return;
+  }
+
+  await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${firebaseApiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+}
+
+export async function createStudentAccount(account) {
+  requireFirebase();
+
+  const normalizedAccount = {
+    email: String(account.email || "").trim(),
+    password: String(account.password || ""),
+    name: String(account.name || "").trim(),
+    batchId: String(account.batchId || account.batch || "").trim(),
+    parentName: String(account.parentName || "").trim(),
+    parentPhone: String(account.parentPhone || account.parentPhoneNumber || "").trim(),
+    studentPhone: String(account.studentPhone || account.studentPhoneNumber || "").trim(),
+    joinDate: String(account.joinDate || "").trim(),
+    monthlyFee: Number(account.monthlyFee ?? account.feeAmount ?? 0),
+    pendingFees: Number(account.pendingFees ?? 0),
+    feeStatus: account.feeStatus === "paid" ? "paid" : "pending",
+  };
+
+  if (!normalizedAccount.email) {
+    throw new Error("Student email is required.");
+  }
+
+  if (!normalizedAccount.password || normalizedAccount.password.length < 6) {
+    throw new Error("Student password must be at least 6 characters.");
+  }
+
+  if (!normalizedAccount.name) {
+    throw new Error("Student name is required.");
+  }
+
+  if (!normalizedAccount.batchId) {
+    throw new Error("Batch is required.");
+  }
+
+  const createdAuthUser = await createStudentAuthUser(
+    normalizedAccount.email,
+    normalizedAccount.password,
+  );
+  const uid = createdAuthUser.uid;
+
+  try {
+    const userPayload = {
+      uid,
+      name: normalizedAccount.name,
+      email: normalizedAccount.email,
+      role: ROLES.STUDENT,
+      createdAt: serverTimestamp(),
+    };
+    const studentPayload = {
+      id: uid,
+      studentId: uid,
+      name: normalizedAccount.name,
+      batch: normalizedAccount.batchId,
+      batchId: normalizedAccount.batchId,
+      feeStatus: normalizedAccount.feeStatus,
+      monthlyFee: normalizedAccount.monthlyFee,
+      feeAmount: normalizedAccount.monthlyFee,
+      pendingFees: normalizedAccount.pendingFees,
+      parentName: normalizedAccount.parentName,
+      parentPhone: normalizedAccount.parentPhone,
+      parentPhoneNumber: normalizedAccount.parentPhone,
+      studentPhone: normalizedAccount.studentPhone,
+      studentPhoneNumber: normalizedAccount.studentPhone,
+      joinDate: normalizedAccount.joinDate,
+      attendanceStatus: "present",
+      attendanceRate: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await Promise.all([
+      setDoc(doc(db, "users", uid), userPayload),
+      setDoc(doc(db, "students", uid), studentPayload),
+    ]);
+
+    return {
+      uid,
+      email: normalizedAccount.email,
+      name: normalizedAccount.name,
+    };
+  } catch (error) {
+    try {
+      await Promise.all([
+        deleteDoc(doc(db, "users", uid)),
+        deleteDoc(doc(db, "students", uid)),
+      ]);
+    } catch {
+      // Rollback cleanup is best-effort; surface the original setup failure.
+    }
+
+    try {
+      await rollbackStudentAuthUser(createdAuthUser.idToken);
+    } catch {
+      // The original Firestore failure is more useful to the admin.
+    }
+
+    throw new Error(`Student Auth user was created, but Firestore setup failed: ${error.message}`);
+  }
 }

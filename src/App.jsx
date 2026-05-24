@@ -21,6 +21,7 @@ import LoginView from "./components/LoginView";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBadge from "./components/RoleBadge";
 import StudentCard from "./components/StudentCard";
+import StudentOverview from "./components/StudentOverview";
 import { PERMISSIONS, ROLES } from "./constants/roles";
 import { useAuth } from "./context/AuthContext";
 import {
@@ -53,6 +54,7 @@ import {
 } from "./utils/formatters";
 import { getRoleHomePath } from "./utils/roleRoutes";
 import {
+  createStudentAccount,
   deleteUserProfile,
   saveUserProfile,
   subscribeToUserProfiles,
@@ -85,8 +87,24 @@ function getDefaultUserForm() {
   };
 }
 
+function getDefaultStudentAccountForm() {
+  return {
+    email: "",
+    password: "",
+    name: "",
+    batchId: "junior-a",
+    parentName: "",
+    parentPhone: "",
+    studentPhone: "",
+    joinDate: new Date().toISOString().slice(0, 10),
+    monthlyFee: "2800",
+    pendingFees: "0",
+    feeStatus: "pending",
+  };
+}
+
 function getProfileStudentId(profile) {
-  return profile?.studentId || profile?.uid || "";
+  return profile?.uid || "";
 }
 
 const roleViews = {
@@ -115,6 +133,7 @@ function App() {
   const [attendanceDate, setAttendanceDate] = useState(getLocalDateKey);
   const [feeMonth, setFeeMonth] = useState(getLocalMonthKey);
   const [studentForm, setStudentForm] = useState(getDefaultStudentForm);
+  const [studentAccountForm, setStudentAccountForm] = useState(getDefaultStudentAccountForm);
   const [userProfiles, setUserProfiles] = useState([]);
   const [userForm, setUserForm] = useState(getDefaultUserForm);
   const [editingStudentId, setEditingStudentId] = useState(null);
@@ -124,12 +143,15 @@ function App() {
   const [isLoadingFees, setIsLoadingFees] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [isCreatingStudentAccount, setIsCreatingStudentAccount] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [studentError, setStudentError] = useState("");
   const [attendanceError, setAttendanceError] = useState("");
   const [feeError, setFeeError] = useState("");
   const [userError, setUserError] = useState("");
   const [studentNotice, setStudentNotice] = useState("");
+  const [studentAccountError, setStudentAccountError] = useState("");
+  const [studentAccountNotice, setStudentAccountNotice] = useState("");
   const [feeNotice, setFeeNotice] = useState("");
   const [userNotice, setUserNotice] = useState("");
   const usesFirestoreStudents = Boolean(isFirebaseConfigured && profile);
@@ -476,6 +498,25 @@ function App() {
     }
   }
 
+  async function submitStudentAccountForm(event) {
+    event.preventDefault();
+    setStudentAccountError("");
+    setStudentAccountNotice("");
+    setIsCreatingStudentAccount(true);
+
+    try {
+      const createdAccount = await createStudentAccount(studentAccountForm);
+      setStudentAccountNotice(
+        `${createdAccount.name} student account created. UID: ${createdAccount.uid}`,
+      );
+      setStudentAccountForm(getDefaultStudentAccountForm());
+    } catch (error) {
+      setStudentAccountError(error.message);
+    } finally {
+      setIsCreatingStudentAccount(false);
+    }
+  }
+
   async function deleteUser(uid) {
     setUserError("");
     setUserNotice("");
@@ -518,6 +559,7 @@ function App() {
               feeNotice={feeNotice}
               feeRecords={feeRecords}
               userProfiles={userProfiles}
+              studentAccountForm={studentAccountForm}
               studentForm={studentForm}
               userForm={userForm}
               editingStudentId={editingStudentId}
@@ -526,20 +568,25 @@ function App() {
               isLoadingFees={isLoadingFees}
               isLoadingStudents={isLoadingStudents}
               isLoadingUsers={isLoadingUsers}
+              isCreatingStudentAccount={isCreatingStudentAccount}
               isSavingStudent={isSavingStudent}
               isSavingUser={isSavingUser}
               studentError={studentError}
+              studentAccountError={studentAccountError}
               userError={userError}
               onAttendanceChange={updateAttendance}
               studentNotice={studentNotice}
+              studentAccountNotice={studentAccountNotice}
               userNotice={userNotice}
               onAttendanceDateChange={setAttendanceDate}
               onFeeMonthChange={setFeeMonth}
               onMarkAll={updateAllAttendance}
               onUpdateFeeStatus={updateFeeStatus}
               onFormChange={setStudentForm}
+              onStudentAccountFormChange={setStudentAccountForm}
               onUserFormChange={setUserForm}
               onSubmitStudent={submitStudentForm}
+              onSubmitStudentAccount={submitStudentAccountForm}
               onSubmitUser={submitUserForm}
               onCancelStudent={resetStudentForm}
               onCancelUser={resetUserForm}
@@ -584,12 +631,20 @@ function App() {
         <Route
           path="/student/*"
           element={
-            <StudentPortal
-              attendanceRecords={attendanceRecords}
-              feeRecords={feeRecords}
-              batches={snapshot.batches}
-              students={students}
-            />
+            <StudentDashboardErrorBoundary>
+              <StudentPortal
+                attendanceRecords={attendanceRecords}
+                attendanceError={attendanceError}
+                feeRecords={feeRecords}
+                feeError={feeError}
+                batches={snapshot.batches}
+                isLoadingAttendance={isLoadingAttendance}
+                isLoadingFees={isLoadingFees}
+                isLoadingStudents={isLoadingStudents}
+                studentError={studentError}
+                students={students}
+              />
+            </StudentDashboardErrorBoundary>
           }
         />
       </Route>
@@ -609,6 +664,40 @@ function RoleRedirect() {
   return <Navigate to={profile ? getRoleHomePath(profile.role) : "/login"} replace />;
 }
 
+class StudentDashboardErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-academy-black px-4 py-6 text-white sm:px-6 md:px-8">
+          <section className="surface mx-auto max-w-3xl p-4">
+            <p className="section-title">Student portal</p>
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Student dashboard could not render
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-neutral-400">
+              The student route loaded, but one dashboard component failed during render.
+            </p>
+            <p className="mt-4 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+              {this.state.error.message || "Unknown render error"}
+            </p>
+          </section>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function ManagementPortal({
   role,
   batches,
@@ -621,6 +710,7 @@ function ManagementPortal({
   feeNotice,
   feeRecords,
   userProfiles,
+  studentAccountForm,
   studentForm,
   userForm,
   editingStudentId,
@@ -629,10 +719,13 @@ function ManagementPortal({
   isLoadingFees,
   isLoadingStudents,
   isLoadingUsers,
+  isCreatingStudentAccount,
   isSavingStudent,
   isSavingUser,
+  studentAccountError,
   studentError,
   userError,
+  studentAccountNotice,
   studentNotice,
   userNotice,
   onAttendanceChange,
@@ -641,8 +734,10 @@ function ManagementPortal({
   onMarkAll,
   onUpdateFeeStatus,
   onFormChange,
+  onStudentAccountFormChange,
   onUserFormChange,
   onSubmitStudent,
+  onSubmitStudentAccount,
   onSubmitUser,
   onCancelStudent,
   onCancelUser,
@@ -755,14 +850,21 @@ function ManagementPortal({
       {activeView === "users" && permissions.canManageUsers && (
         <UsersManagementView
           currentUserId={profile.uid}
+          batches={batches}
           editingUserId={editingUserId}
+          isCreatingStudentAccount={isCreatingStudentAccount}
           isLoadingUsers={isLoadingUsers}
           isSavingUser={isSavingUser}
           onCancel={onCancelUser}
           onDelete={onDeleteUser}
           onEdit={onEditUser}
           onFormChange={onUserFormChange}
+          onStudentAccountFormChange={onStudentAccountFormChange}
+          onSubmitStudentAccount={onSubmitStudentAccount}
           onSubmit={onSubmitUser}
+          studentAccountError={studentAccountError}
+          studentAccountForm={studentAccountForm}
+          studentAccountNotice={studentAccountNotice}
           userError={userError}
           userForm={userForm}
           userNotice={userNotice}
@@ -774,13 +876,33 @@ function ManagementPortal({
   );
 }
 
-function StudentPortal({ attendanceRecords, batches, feeRecords, students }) {
+function StudentPortal({
+  attendanceRecords,
+  attendanceError,
+  batches,
+  feeRecords,
+  feeError,
+  isLoadingAttendance,
+  isLoadingFees,
+  isLoadingStudents,
+  studentError,
+  students,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, profile } = useAuth();
   const activeView = location.pathname.split("/")[2] || "overview";
   const studentId = getProfileStudentId(profile);
   const student = students.find((record) => record.id === studentId);
+
+  if (import.meta.env.DEV) {
+    console.debug("[StudentPortal]", {
+      activeView,
+      hasStudentDocument: Boolean(student),
+      studentId,
+      studentsLoaded: students.length,
+    });
+  }
 
   if (!roleViews[ROLES.STUDENT].includes(activeView)) {
     return <Navigate to={getRoleHomePath(ROLES.STUDENT)} replace />;
@@ -799,12 +921,19 @@ function StudentPortal({ attendanceRecords, batches, feeRecords, students }) {
       onNavigate={() => navigate(getRoleHomePath(ROLES.STUDENT))}
       onLogout={handleLogout}
     >
-      <StudentOverview
-        attendanceRecords={attendanceRecords}
-        batches={batches}
-        feeRecords={feeRecords}
-        student={student}
-      />
+      <StudentDashboardErrorBoundary>
+        <StudentOverview
+          attendanceRecords={attendanceRecords}
+          attendanceError={attendanceError}
+          batches={batches}
+          feeRecords={feeRecords}
+          feeError={feeError}
+          isLoading={isLoadingStudents || isLoadingAttendance || isLoadingFees}
+          student={student}
+          studentError={studentError}
+          studentId={studentId}
+        />
+      </StudentDashboardErrorBoundary>
     </AppShell>
   );
 }
@@ -1821,15 +1950,22 @@ function formatProfileCreatedAt(value) {
 }
 
 function UsersManagementView({
+  batches,
   currentUserId,
   editingUserId,
+  isCreatingStudentAccount,
   isLoadingUsers,
   isSavingUser,
   onCancel,
   onDelete,
   onEdit,
   onFormChange,
+  onStudentAccountFormChange,
+  onSubmitStudentAccount,
   onSubmit,
+  studentAccountError,
+  studentAccountForm,
+  studentAccountNotice,
   userError,
   userForm,
   userNotice,
@@ -1846,6 +1982,212 @@ function UsersManagementView({
         </div>
         <p className="text-sm text-neutral-400">{users.length} profiles</p>
       </section>
+
+      <form className="surface space-y-5 p-4" onSubmit={onSubmitStudentAccount}>
+        <div>
+          <p className="section-title">Create Student Account</p>
+          <h3 className="mt-2 text-lg font-semibold text-white">Auth + profile setup</h3>
+          <p className="mt-2 text-sm leading-6 text-neutral-400">
+            Creates the Firebase Auth login, users UID profile, and students UID dashboard record.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Student email</span>
+            <input
+              className="field w-full"
+              type="email"
+              placeholder="student@academy.com"
+              value={studentAccountForm.email}
+              onChange={(event) =>
+                onStudentAccountFormChange({ ...studentAccountForm, email: event.target.value })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Password</span>
+            <input
+              className="field w-full"
+              type="password"
+              minLength={6}
+              placeholder="Minimum 6 characters"
+              value={studentAccountForm.password}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  password: event.target.value,
+                })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Student name</span>
+            <input
+              className="field w-full"
+              placeholder="Full name"
+              value={studentAccountForm.name}
+              onChange={(event) =>
+                onStudentAccountFormChange({ ...studentAccountForm, name: event.target.value })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Batch</span>
+            <select
+              className="field w-full"
+              value={studentAccountForm.batchId}
+              onChange={(event) =>
+                onStudentAccountFormChange({ ...studentAccountForm, batchId: event.target.value })
+              }
+              required
+            >
+              {batches.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Parent name</span>
+            <input
+              className="field w-full"
+              placeholder="Parent or guardian"
+              value={studentAccountForm.parentName}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  parentName: event.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Parent phone</span>
+            <input
+              className="field w-full"
+              placeholder="Parent phone number"
+              value={studentAccountForm.parentPhone}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  parentPhone: event.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Student phone</span>
+            <input
+              className="field w-full"
+              placeholder="Student phone number"
+              value={studentAccountForm.studentPhone}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  studentPhone: event.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Join date</span>
+            <input
+              className="field w-full"
+              type="date"
+              value={studentAccountForm.joinDate}
+              onChange={(event) =>
+                onStudentAccountFormChange({ ...studentAccountForm, joinDate: event.target.value })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Monthly fee</span>
+            <input
+              className="field w-full"
+              type="number"
+              min="0"
+              value={studentAccountForm.monthlyFee}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  monthlyFee: event.target.value,
+                })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Pending fees</span>
+            <input
+              className="field w-full"
+              type="number"
+              min="0"
+              value={studentAccountForm.pendingFees}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  pendingFees: event.target.value,
+                })
+              }
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Fee status</span>
+            <select
+              className="field w-full"
+              value={studentAccountForm.feeStatus}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  feeStatus: event.target.value,
+                })
+              }
+            >
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+            </select>
+          </label>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end xl:col-span-2">
+            <button
+              type="submit"
+              className="gold-button min-h-11 w-full flex-1"
+              disabled={isCreatingStudentAccount}
+            >
+              <UserPlus size={16} />
+              {isCreatingStudentAccount ? "Creating..." : "Create Student Account"}
+            </button>
+          </div>
+        </div>
+
+        {(studentAccountError || studentAccountNotice) && (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              studentAccountError
+                ? "border-rose-400/30 bg-rose-400/10 text-rose-100"
+                : "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+            }`}
+          >
+            {studentAccountError || studentAccountNotice}
+          </p>
+        )}
+      </form>
 
       <form className="surface space-y-5 p-4" onSubmit={onSubmit}>
         <div>
@@ -2731,170 +3073,6 @@ function SettingsView() {
           </p>
         </article>
       </div>
-    </div>
-  );
-}
-
-function StudentOverview({ attendanceRecords, batches, feeRecords, student }) {
-  if (!student) {
-    return (
-      <section className="surface p-4">
-        <p className="section-title">Student portal</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">Profile incomplete</h2>
-        <p className="mt-3 text-sm leading-6 text-neutral-400">
-          This account is missing a valid `studentId` mapping in Firestore.
-        </p>
-      </section>
-    );
-  }
-
-  const batch = getBatchById(batches, student.batchId);
-  const todayStatus = getAttendanceStatusForDate(
-    attendanceRecords,
-    student.id,
-    getLocalDateKey(),
-    "not marked",
-  );
-  const currentFeeRecord = feeRecords.find(
-    (record) => record.studentId === student.id && record.month === getLocalMonthKey(),
-  );
-  const currentFeeStatus = currentFeeRecord?.status || "pending";
-  const currentFeeAmount = currentFeeRecord?.amount || student.feeAmount;
-  const currentAmountPaid = currentFeeRecord?.amountPaid || 0;
-  const currentDueAmount =
-    currentFeeRecord?.dueAmount ?? Math.max(currentFeeAmount - currentAmountPaid, 0);
-  const ownAttendanceRecords = attendanceRecords.filter((record) => record.studentId === student.id);
-  const ownFeeRecords = feeRecords.filter((record) => record.studentId === student.id);
-
-  return (
-    <div className="space-y-8">
-      <section>
-        <p className="section-title">Student portal</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">My overview</h2>
-      </section>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <DashboardCard
-          icon={CalendarDays}
-          label="Today's attendance"
-          value={todayStatus === "present" ? "Present" : todayStatus === "absent" ? "Absent" : "Not marked"}
-          helper="Based on today's saved record"
-        />
-        <DashboardCard
-          icon={CircleDollarSign}
-          label="Fee status"
-          value={currentFeeStatus === "paid" ? "Paid" : "Pending"}
-          helper={`${formatCurrency(currentAmountPaid)} paid, ${formatCurrency(currentDueAmount)} due`}
-        />
-        <DashboardCard
-          icon={Users}
-          label="Batch"
-          value={batch?.name}
-          helper={batch?.schedule}
-        />
-      </div>
-
-      <section className="surface p-4">
-        <h3 className="text-lg font-semibold text-white">My profile</h3>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-sm text-neutral-500">Name</dt>
-            <dd className="mt-1 text-white">{student.name}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Student ID</dt>
-            <dd className="mt-1 text-white">{student.id}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Batch</dt>
-            <dd className="mt-1 text-white">{batch?.name}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Join date</dt>
-            <dd className="mt-1 text-white">{formatDate(student.joinDate)}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Student phone</dt>
-            <dd className="mt-1 text-white">{student.studentPhoneNumber || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Parent name</dt>
-            <dd className="mt-1 text-white">{student.parentName || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Parent phone</dt>
-            <dd className="mt-1 text-white">{student.parentPhoneNumber || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Coach</dt>
-            <dd className="mt-1 text-white">{batch?.coach}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <p className="section-title">Attendance</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">My attendance history</h3>
-        </div>
-
-        {ownAttendanceRecords.length === 0 ? (
-          <div className="surface p-4 text-sm text-neutral-400">No attendance records found.</div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {ownAttendanceRecords.map((record) => (
-              <article key={record.id} className="surface p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      {formatDate(record.date)}
-                    </p>
-                    <p className="mt-2 font-medium text-white">{batch?.name}</p>
-                  </div>
-                  <AttendanceStatusBadge status={record.status} />
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <p className="section-title">Fees</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">My fee history</h3>
-        </div>
-
-        {ownFeeRecords.length === 0 ? (
-          <div className="surface p-4 text-sm text-neutral-400">
-            No saved fee records found for this account.
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {ownFeeRecords.map((record) => (
-              <article key={record.id} className="surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      {formatMonth(record.month)}
-                    </p>
-                    <p className="mt-2 font-medium text-white">{formatCurrency(record.amount)}</p>
-                    <p className="mt-1 text-sm text-neutral-400">
-                      Paid {formatCurrency(record.amountPaid)} | Due{" "}
-                      {formatCurrency(record.dueAmount)}
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      {record.paymentDate ? formatDate(record.paymentDate) : "Payment pending"}
-                    </p>
-                    {record.notes && <p className="mt-2 text-sm text-neutral-300">{record.notes}</p>}
-                  </div>
-                  <FeeStatusBadge status={record.status} />
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }

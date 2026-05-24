@@ -16,6 +16,7 @@ const firebaseConfig = {
 };
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+export const firebaseApiKey = firebaseConfig.apiKey;
 
 const firebaseApp = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 

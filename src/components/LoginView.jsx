@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { LockKeyhole, LogIn, Mail } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import heroImage from "../assets/login-hero.jpg";

@@ -2,11 +2,13 @@ import * as React from "react";
 import {
   BarChart3,
   CalendarCheck2,
+  Circle,
   ClipboardList,
   GraduationCap,
   History,
   LogOut,
   Settings2,
+  UserRound,
   UserCog,
   WalletCards,
 } from "lucide-react";
@@ -21,6 +23,7 @@ const iconMap = {
   reports: ClipboardList,
   users: UserCog,
   settings: Settings2,
+  overview: UserRound,
 };
 
 export default function AppShell({
@@ -31,6 +34,9 @@ export default function AppShell({
   onLogout,
   children,
 }) {
+  const shellUser = currentUser || { name: "Academy user", role: "student" };
+  const shellTitle = shellUser.role === "student" ? "Student Portal" : "Management";
+
   return (
     <div className="min-h-screen bg-academy-black text-white">
       <header className="border-b border-white/5 bg-black/60 px-4 py-4 backdrop-blur md:hidden">
@@ -38,7 +44,7 @@ export default function AppShell({
           <div>
             <p className="section-title">Archery Academy</p>
             <div className="mt-2">
-              <RoleBadge role={currentUser.role} />
+              <RoleBadge role={shellUser.role} />
             </div>
           </div>
           <button
@@ -57,16 +63,16 @@ export default function AppShell({
         <aside className="hidden border-r border-white/5 bg-black/45 p-5 md:flex md:flex-col">
           <div>
             <p className="section-title">Archery Academy</p>
-            <h1 className="mt-3 text-xl font-semibold text-white">Management</h1>
-            <p className="mt-2 text-sm text-neutral-400">{currentUser.name}</p>
+            <h1 className="mt-3 text-xl font-semibold text-white">{shellTitle}</h1>
+            <p className="mt-2 text-sm text-neutral-400">{shellUser.name}</p>
             <div className="mt-3">
-              <RoleBadge role={currentUser.role} />
+              <RoleBadge role={shellUser.role} />
             </div>
           </div>
 
           <nav className="mt-8 space-y-2">
             {navigation.map((item) => {
-              const Icon = iconMap[item.id];
+              const Icon = iconMap[item.id] || Circle;
               const isActive = item.id === activeView;
 
               return (
@@ -102,7 +108,7 @@ export default function AppShell({
           style={{ gridTemplateColumns: `repeat(${navigation.length}, minmax(0, 1fr))` }}
         >
           {navigation.map((item) => {
-            const Icon = iconMap[item.id];
+            const Icon = iconMap[item.id] || Circle;
             const isActive = item.id === activeView;
 
             return (
