@@ -41,10 +41,15 @@ export default function AppShell({
 }) {
   const shellUser = currentUser || { name: "Academy user", role: "student" };
   const shellTitle = shellUser.role === "student" ? "Student Portal" : "Management";
+  const isStudentShell = shellUser.role === "student";
 
   return (
     <div className="min-h-screen bg-academy-black text-white">
-      <header className="border-b border-white/5 bg-black/60 px-4 py-4 backdrop-blur md:hidden">
+      <header
+        className={`border-b border-white/5 bg-black/60 px-4 py-4 backdrop-blur md:hidden ${
+          isStudentShell ? "sticky top-0 z-20" : ""
+        }`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="section-title">ARCOS ARCHERY ACADEMY</p>
@@ -110,12 +115,22 @@ export default function AppShell({
           </div>
         </aside>
 
-        <main className="min-w-0 px-4 pb-28 pt-5 sm:px-6 md:px-8 md:pb-8">{children}</main>
+        <main
+          className={`min-w-0 px-4 pt-5 sm:px-6 md:px-8 md:pb-8 ${
+            isStudentShell ? "pb-32 md:pb-8" : "pb-28"
+          }`}
+        >
+          {children}
+        </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-black/95 px-2 py-2 backdrop-blur md:hidden">
+      <nav
+        className={`fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-black/95 px-2 backdrop-blur md:hidden ${
+          isStudentShell ? "student-bottom-nav py-2" : "py-2"
+        }`}
+      >
         <div
-          className="mx-auto grid max-w-lg gap-1"
+          className={`mx-auto grid max-w-lg gap-1 ${isStudentShell ? "rounded-2xl" : ""}`}
           style={{ gridTemplateColumns: `repeat(${navigation.length}, minmax(0, 1fr))` }}
         >
           {navigation.map((item) => {
@@ -126,11 +141,11 @@ export default function AppShell({
               <button
                 key={item.id}
                 type="button"
-                className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] leading-tight transition ${
+                className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] leading-tight transition ${
                   isActive
                     ? "bg-academy-gold text-black"
                     : "text-neutral-400 hover:bg-white/[0.04] hover:text-white"
-                }`}
+                } ${isStudentShell ? "min-h-[58px] py-2.5" : "py-2"}`}
                 onClick={() => onNavigate(item.id)}
               >
                 <Icon size={18} />

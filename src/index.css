@@ -225,6 +225,11 @@ textarea {
     background: rgba(212, 175, 55, 0.12);
     color: rgb(var(--academy-gold));
   }
+
+  .student-bottom-nav {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.28);
+  }
 }
 
 html[data-theme="light"] .login-view {

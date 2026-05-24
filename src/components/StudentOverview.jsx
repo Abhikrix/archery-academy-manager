@@ -5,9 +5,10 @@ import {
   ClipboardCheck,
   Megaphone,
   Package,
+  Pin,
+  Tag,
   Users,
 } from "lucide-react";
-import DashboardCard from "./DashboardCard";
 import FeeStatusBadge from "./FeeStatusBadge";
 import {
   formatCurrency,
@@ -45,6 +46,42 @@ function getVisibleStudentId(student) {
   return "Student ID not added";
 }
 
+function getDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  const date = new Date(String(value).includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDisplayDate(value) {
+  const date = getDate(value);
+
+  if (!date) {
+    return "Not added";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function getTimestampMillis(value) {
+  const date = getDate(value);
+  return date ? date.getTime() : 0;
+}
+
 function getAttendanceStatusForDate(attendanceRecords, studentId, date, fallback = "") {
   return (
     attendanceRecords.find((record) => record.studentId === studentId && record.date === date)
@@ -52,12 +89,24 @@ function getAttendanceStatusForDate(attendanceRecords, studentId, date, fallback
   );
 }
 
+function getAnnouncementCategory(announcement) {
+  return String(announcement.category || "Academy").trim() || "Academy";
+}
+
+function isAnnouncementPinned(announcement, index, hasPinnedAnnouncements) {
+  if (announcement.pinned === true) {
+    return true;
+  }
+
+  return !hasPinnedAnnouncements && index === 0;
+}
+
 function AttendanceStatusBadge({ status }) {
   const isPresent = status === "present";
 
   return (
     <span
-      className={`inline-flex min-h-7 items-center justify-center rounded-md border px-2 text-xs font-medium capitalize ${
+      className={`inline-flex min-h-7 max-w-full items-center justify-center rounded-md border px-2 text-xs font-medium capitalize ${
         isPresent
           ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
           : "border-rose-400/40 bg-rose-400/10 text-rose-200"
@@ -68,53 +117,492 @@ function AttendanceStatusBadge({ status }) {
   );
 }
 
-function StudentAnnouncements({ announcements = [], error = "" }) {
-  const latestAnnouncements = announcements.slice(0, 3);
-
+function StudentPageHeader({ eyebrow, title, helper }) {
   return (
-    <section className="space-y-4">
-      <div>
-        <p className="section-title">Latest Announcements</p>
-        <h3 className="mt-2 text-lg font-semibold text-white">Academy updates</h3>
-      </div>
-
-      {error && (
-        <p className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
-          {error}
-        </p>
-      )}
-
-      {latestAnnouncements.length === 0 ? (
-        <div className="surface p-4 text-sm text-neutral-400">
-          No announcements have been published yet.
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {latestAnnouncements.map((announcement) => (
-            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
-              <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
-                  <Megaphone size={18} />
-                </span>
-                <div className="min-w-0">
-                  <h4 className="break-words font-semibold text-white">{announcement.title}</h4>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
-                    {announcement.message}
-                  </p>
-                  <p className="mt-3 text-xs text-neutral-500">
-                    {formatDate(announcement.createdAt)}
-                  </p>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+    <section className="space-y-2">
+      <p className="section-title">{eyebrow}</p>
+      <h2 className="break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">
+        {title}
+      </h2>
+      {helper && <p className="max-w-2xl text-sm leading-6 text-neutral-400">{helper}</p>}
     </section>
   );
 }
 
+function MetricCard({ icon: Icon, label, value, helper }) {
+  return (
+    <article className="surface min-w-0 overflow-hidden p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-xs font-medium uppercase tracking-[0.16em] text-neutral-500">
+            {label}
+          </p>
+          <p className="mt-3 break-words text-2xl font-semibold text-white">{value}</p>
+        </div>
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
+          <Icon size={20} />
+        </span>
+      </div>
+      {helper && <p className="mt-4 break-words text-sm leading-5 text-neutral-500">{helper}</p>}
+    </article>
+  );
+}
+
+function ProfileCard({ batch, student, visibleStudentId }) {
+  return (
+    <section className="surface overflow-hidden p-4 sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="section-title">Student + Parent</p>
+          <h3 className="mt-2 break-words text-2xl font-semibold text-white">
+            {student.name || "Student profile"}
+          </h3>
+          <p className="mt-2 break-words text-sm text-neutral-400">
+            {batch?.name || "Batch not assigned"} | {visibleStudentId}
+          </p>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-full border border-academy-gold/40 bg-academy-gold/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-academy-gold">
+          Read only
+        </span>
+      </div>
+
+      <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["Parent", student.parentName || "Not added"],
+          ["Parent phone", student.parentPhoneNumber || "Not added"],
+          ["Student phone", student.studentPhoneNumber || "Not added"],
+          ["Date of birth", formatDate(student.dateOfBirth || student.joinDate)],
+          ["Coach", batch?.coach || "Not assigned"],
+          ["Monthly fee", formatCurrency(student.monthlyFee ?? student.feeAmount)],
+          ["Pending fees", formatCurrency(student.pendingFees)],
+          ["Fee status", student.feeStatus || "Pending"],
+        ].map(([label, value]) => (
+          <div key={label} className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-3">
+            <dt className="text-xs uppercase tracking-[0.14em] text-neutral-500">{label}</dt>
+            <dd className="mt-2 break-words text-sm font-medium text-white">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function EmptyState({ children }) {
+  return <div className="surface p-4 text-sm leading-6 text-neutral-400">{children}</div>;
+}
+
+function ProgressRing({ percentage }) {
+  const clampedPercentage = Math.min(Math.max(percentage, 0), 100);
+
+  return (
+    <div
+      className="grid h-24 w-24 shrink-0 place-items-center rounded-full"
+      style={{
+        background: `conic-gradient(rgb(var(--academy-gold)) ${clampedPercentage}%, rgba(212, 175, 55, 0.16) 0)`,
+      }}
+    >
+      <div className="grid h-20 w-20 place-items-center rounded-full bg-academy-panel text-xl font-semibold text-white">
+        {clampedPercentage}%
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementCard({ announcement, isPinned = false }) {
+  const category = getAnnouncementCategory(announcement);
+
+  return (
+    <article className="surface min-w-0 overflow-hidden p-4">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
+          {isPinned ? <Pin size={18} /> : <Megaphone size={18} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-academy-gold/30 bg-academy-gold/10 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-academy-gold">
+              {category}
+            </span>
+            {isPinned && (
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-300">
+                Pinned
+              </span>
+            )}
+          </div>
+          <h3 className="mt-3 break-words text-lg font-semibold text-white">
+            {announcement.title || "Untitled announcement"}
+          </h3>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
+            {announcement.message || "No message added."}
+          </p>
+          <p className="mt-3 text-xs text-neutral-500">
+            {formatDisplayDate(announcement.createdAt)}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function OverviewPage({ data }) {
+  const latestAnnouncement = data.announcements[0];
+
+  return (
+    <div className="space-y-5">
+      <StudentPageHeader
+        eyebrow="Overview"
+        title={data.student.name || "Student dashboard"}
+        helper="A cleaner read-only snapshot for students and parents."
+      />
+
+      <ProfileCard
+        batch={data.batch}
+        student={data.student}
+        visibleStudentId={data.visibleStudentId}
+      />
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={ClipboardCheck}
+          label="Attendance"
+          value={`${data.attendancePercentage}%`}
+          helper={
+            data.attendanceSummary.marked
+              ? `${data.attendanceSummary.present} present this month`
+              : "No attendance marked this month"
+          }
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Pending fees"
+          value={formatCurrency(data.currentDueAmount)}
+          helper={`${formatCurrency(data.currentAmountPaid)} paid this month`}
+        />
+        <MetricCard
+          icon={Megaphone}
+          label="Latest update"
+          value={latestAnnouncement?.title || "No updates"}
+          helper={latestAnnouncement ? formatDisplayDate(latestAnnouncement.createdAt) : "No announcement yet"}
+        />
+        <MetricCard
+          icon={Package}
+          label="Equipment dues"
+          value={formatCurrency(data.equipmentTotals.due)}
+          helper={`${data.ownEquipmentPurchases.length} purchase records`}
+        />
+      </section>
+    </div>
+  );
+}
+
+function AttendancePage({ data }) {
+  const recentRecords = data.ownAttendanceRecords.slice(0, 12);
+
+  return (
+    <div className="space-y-5">
+      <StudentPageHeader
+        eyebrow="Attendance"
+        title="Attendance history"
+        helper="Track present and absent records in a phone-friendly calendar list."
+      />
+
+      <section className="surface flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="section-title">This month</p>
+          <h3 className="mt-2 text-xl font-semibold text-white">
+            {data.attendanceSummary.marked} marked sessions
+          </h3>
+          <p className="mt-2 text-sm text-neutral-400">
+            {data.attendanceSummary.present} present | {data.attendanceSummary.absent} absent
+          </p>
+        </div>
+        <ProgressRing percentage={data.attendancePercentage} />
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="section-title">Calendar list</p>
+            <h3 className="mt-2 text-lg font-semibold text-white">Recent attendance</h3>
+          </div>
+          <span className="text-sm text-neutral-500">{data.ownAttendanceRecords.length} records</span>
+        </div>
+
+        {recentRecords.length === 0 ? (
+          <EmptyState>No attendance records found.</EmptyState>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {recentRecords.map((record) => (
+              <article key={record.id} className="surface min-w-0 overflow-hidden p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-xs uppercase tracking-[0.18em] text-neutral-500">
+                      {formatDate(record.date)}
+                    </p>
+                    <p className="mt-2 break-words font-medium text-white">
+                      {data.batch?.name || "Student batch"}
+                    </p>
+                  </div>
+                  <AttendanceStatusBadge status={record.status} />
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function FeesPage({ data }) {
+  return (
+    <div className="space-y-5">
+      <StudentPageHeader
+        eyebrow="Fees"
+        title="Fee status"
+        helper="Review monthly fee records, pending dues, and payment status."
+      />
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Current dues"
+          value={formatCurrency(data.currentDueAmount)}
+          helper={data.currentFeeStatus === "paid" ? "No pending dues" : "Payment pending"}
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Amount paid"
+          value={formatCurrency(data.currentAmountPaid)}
+          helper={formatMonth(getLocalMonthKey())}
+        />
+        <MetricCard
+          icon={CalendarDays}
+          label="Monthly fee"
+          value={formatCurrency(data.currentFeeAmount)}
+          helper={data.currentFeeRecord ? "Saved fee record" : "Student profile"}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="section-title">Payment history</p>
+            <h3 className="mt-2 text-lg font-semibold text-white">Fee records</h3>
+          </div>
+          <FeeStatusBadge status={data.currentFeeStatus} />
+        </div>
+
+        {data.ownFeeRecords.length === 0 ? (
+          <EmptyState>No saved fee records found for this account.</EmptyState>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.ownFeeRecords.map((record) => (
+              <article key={record.id} className="surface min-w-0 overflow-hidden p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                      {formatMonth(record.month)}
+                    </p>
+                    <p className="mt-2 text-xl font-semibold text-white">
+                      {formatCurrency(record.amount)}
+                    </p>
+                    <p className="mt-2 text-sm text-neutral-400">
+                      Paid {formatCurrency(record.amountPaid)} | Due {formatCurrency(record.dueAmount)}
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      {record.paymentDate ? formatDate(record.paymentDate) : "Payment pending"}
+                    </p>
+                  </div>
+                  <FeeStatusBadge status={record.status} />
+                </div>
+                {record.notes && <p className="mt-3 text-sm text-neutral-300">{record.notes}</p>}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function EquipmentPage({ data }) {
+  return (
+    <div className="space-y-5">
+      <StudentPageHeader
+        eyebrow="Equipment"
+        title="Equipment purchases"
+        helper="View purchased items, payments made, and pending equipment balances."
+      />
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <MetricCard
+          icon={Package}
+          label="Purchase total"
+          value={formatCurrency(data.equipmentTotals.total)}
+          helper="Total equipment value"
+        />
+        <MetricCard
+          icon={CircleDollarSign}
+          label="Paid"
+          value={formatCurrency(data.equipmentTotals.paid)}
+          helper="Equipment payments"
+        />
+        <MetricCard
+          icon={ClipboardCheck}
+          label="Pending"
+          value={formatCurrency(data.equipmentTotals.due)}
+          helper="Equipment balance"
+        />
+      </section>
+
+      {data.ownEquipmentPurchases.length === 0 ? (
+        <EmptyState>No equipment purchases found for this account.</EmptyState>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {data.ownEquipmentPurchases.map((purchase) => (
+            <article key={purchase.id} className="surface min-w-0 overflow-hidden p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-xs uppercase tracking-[0.18em] text-neutral-500">
+                    {purchase.category}
+                  </p>
+                  <h3 className="mt-2 break-words text-lg font-semibold text-white">
+                    {purchase.itemName}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-400">
+                    Purchased {formatDate(purchase.purchaseDate)}
+                  </p>
+                </div>
+                <FeeStatusBadge status={purchase.paymentStatus} />
+              </div>
+              <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <div className="min-w-0">
+                  <dt className="text-neutral-500">Total</dt>
+                  <dd className="mt-1 break-words text-white">
+                    {formatCurrency(purchase.totalPrice)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-neutral-500">Paid</dt>
+                  <dd className="mt-1 break-words text-white">
+                    {formatCurrency(purchase.paidAmount)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-neutral-500">Due</dt>
+                  <dd className="mt-1 break-words text-white">
+                    {formatCurrency(purchase.dueAmount)}
+                  </dd>
+                </div>
+              </dl>
+              {purchase.notes && <p className="mt-3 text-sm text-neutral-300">{purchase.notes}</p>}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnnouncementsPage({ announcementError, announcements }) {
+  const [selectedCategory, setSelectedCategory] = React.useState("All");
+  const hasPinnedAnnouncements = announcements.some((announcement) => announcement.pinned === true);
+  const decoratedAnnouncements = announcements.map((announcement, index) => ({
+    ...announcement,
+    category: getAnnouncementCategory(announcement),
+    isPinned: isAnnouncementPinned(announcement, index, hasPinnedAnnouncements),
+  }));
+  const categories = [
+    "All",
+    ...Array.from(new Set(decoratedAnnouncements.map((announcement) => announcement.category))),
+  ];
+  const pinnedAnnouncements = decoratedAnnouncements.filter((announcement) => announcement.isPinned);
+  const visibleAnnouncements =
+    selectedCategory === "All"
+      ? decoratedAnnouncements
+      : decoratedAnnouncements.filter((announcement) => announcement.category === selectedCategory);
+
+  return (
+    <div className="space-y-5">
+      <StudentPageHeader
+        eyebrow="Announcements"
+        title="Academy updates"
+        helper="Pinned notices and category-based updates from the academy."
+      />
+
+      {announcementError && (
+        <p className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+          {announcementError}
+        </p>
+      )}
+
+      {decoratedAnnouncements.length === 0 ? (
+        <EmptyState>No announcements have been published yet.</EmptyState>
+      ) : (
+        <>
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <Tag size={16} className="shrink-0 text-academy-gold" />
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition ${
+                    selectedCategory === category
+                      ? "border-academy-gold bg-academy-gold text-black"
+                      : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-academy-gold/60 hover:text-white"
+                  }`}
+                  onClick={() => setSelectedCategory(category)}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {pinnedAnnouncements.length > 0 && (
+            <section className="space-y-3">
+              <div>
+                <p className="section-title">Pinned</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">Important notices</h3>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {pinnedAnnouncements.slice(0, 2).map((announcement) => (
+                  <AnnouncementCard
+                    key={announcement.id}
+                    announcement={announcement}
+                    isPinned={announcement.isPinned}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="space-y-3">
+            <div>
+              <p className="section-title">Feed</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                {selectedCategory === "All" ? "All announcements" : selectedCategory}
+              </h3>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {visibleAnnouncements.map((announcement) => (
+                <AnnouncementCard
+                  key={announcement.id}
+                  announcement={announcement}
+                  isPinned={announcement.isPinned}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function StudentOverview({
+  activeView = "overview",
   attendanceRecords = [],
   attendanceError = "",
   announcements = [],
@@ -129,10 +617,17 @@ export default function StudentOverview({
   studentError = "",
   studentId = "",
 }) {
-  const portalErrors = [studentError, attendanceError, feeError, equipmentError, announcementError].filter(Boolean);
+  const portalErrors = [
+    studentError,
+    attendanceError,
+    feeError,
+    equipmentError,
+    activeView !== "announcements" ? announcementError : "",
+  ].filter(Boolean);
 
   if (import.meta.env.DEV) {
     console.debug("[StudentOverview]", {
+      activeView,
       attendanceRecords: attendanceRecords.length,
       announcements: announcements.length,
       equipmentPurchases: equipmentPurchases.length,
@@ -149,7 +644,7 @@ export default function StudentOverview({
         <p className="section-title">Student + parent portal</p>
         <h2 className="mt-2 text-xl font-semibold text-white">Loading dashboard...</h2>
         <p className="mt-3 text-sm leading-6 text-neutral-400">
-          Fetching student profile, attendance, and fee records.
+          Fetching student profile, attendance, fee, equipment, and announcement records.
         </p>
       </section>
     );
@@ -161,7 +656,7 @@ export default function StudentOverview({
         <p className="section-title">Student + parent portal</p>
         <h2 className="mt-2 text-xl font-semibold text-white">Unable to load student dashboard</h2>
         <p className="mt-3 text-sm leading-6 text-neutral-400">
-          This login is active, but Firestore did not return the student dashboard records.
+          This login is active, but Firestore did not return the student portal records.
         </p>
         <div className="mt-4 space-y-2">
           {portalErrors.map((error) => (
@@ -211,14 +706,23 @@ export default function StudentOverview({
   );
   const currentDueAmount =
     currentFeeRecord?.dueAmount ?? profilePendingFees ?? Math.max(currentFeeAmount - currentAmountPaid, 0);
-  const ownAttendanceRecords = attendanceRecords.filter((record) => record.studentId === student.id);
-  const ownFeeRecords = feeRecords.filter((record) => record.studentId === student.id);
-  const ownEquipmentPurchases = equipmentPurchases.filter((record) => record.studentId === student.id);
+  const ownAttendanceRecords = attendanceRecords
+    .filter((record) => record.studentId === student.id)
+    .sort((first, second) => String(second.date).localeCompare(String(first.date)));
+  const ownFeeRecords = feeRecords
+    .filter((record) => record.studentId === student.id)
+    .sort((first, second) => String(second.month).localeCompare(String(first.month)));
+  const ownEquipmentPurchases = equipmentPurchases
+    .filter((record) => record.studentId === student.id)
+    .sort((first, second) => String(second.purchaseDate).localeCompare(String(first.purchaseDate)));
+  const sortedAnnouncements = [...announcements].sort(
+    (first, second) => getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt),
+  );
   const equipmentTotals = ownEquipmentPurchases.reduce(
     (summary, purchase) => ({
-      paid: summary.paid + purchase.paidAmount,
-      due: summary.due + purchase.dueAmount,
-      total: summary.total + purchase.totalPrice,
+      paid: summary.paid + Number(purchase.paidAmount || 0),
+      due: summary.due + Number(purchase.dueAmount || 0),
+      total: summary.total + Number(purchase.totalPrice || 0),
     }),
     { paid: 0, due: 0, total: 0 },
   );
@@ -231,19 +735,36 @@ export default function StudentOverview({
     marked: currentMonthAttendanceRecords.length,
   };
   const attendancePercentage = getPercentage(attendanceSummary.present, attendanceSummary.marked);
+  const data = {
+    announcements: sortedAnnouncements,
+    attendancePercentage,
+    attendanceSummary,
+    batch,
+    currentAmountPaid,
+    currentDueAmount,
+    currentFeeAmount,
+    currentFeeRecord,
+    currentFeeStatus,
+    equipmentTotals,
+    ownAttendanceRecords,
+    ownEquipmentPurchases,
+    ownFeeRecords,
+    student,
+    todayStatus,
+    visibleStudentId,
+  };
+  const pageMap = {
+    overview: <OverviewPage data={data} />,
+    attendance: <AttendancePage data={data} />,
+    fees: <FeesPage data={data} />,
+    equipment: <EquipmentPage data={data} />,
+    announcements: (
+      <AnnouncementsPage announcementError={announcementError} announcements={data.announcements} />
+    ),
+  };
 
   return (
-    <div className="space-y-8">
-      <section>
-        <p className="section-title">Student + parent portal</p>
-        <h2 className="mt-2 text-xl font-semibold text-white">
-          {student.name || "Student dashboard"}
-        </h2>
-        <p className="mt-2 text-sm text-neutral-400">
-          Read-only academy overview for the student and parent.
-        </p>
-      </section>
-
+    <div className="student-portal space-y-6">
       {portalErrors.length > 0 && (
         <div className="space-y-2">
           {portalErrors.map((error) => (
@@ -257,247 +778,7 @@ export default function StudentOverview({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <DashboardCard
-          icon={Users}
-          label="Student"
-          value={student.name || "Not added"}
-          helper={batch?.name || "Batch not assigned"}
-        />
-        <DashboardCard
-          icon={ClipboardCheck}
-          label="Attendance summary"
-          value={`${attendancePercentage}%`}
-          helper={
-            attendanceSummary.marked
-              ? `${attendanceSummary.present} present, ${attendanceSummary.absent} absent this month`
-              : "No attendance marked this month"
-          }
-        />
-        <DashboardCard
-          icon={CircleDollarSign}
-          label="Fee status"
-          value={currentFeeStatus === "paid" ? "Paid" : "Pending"}
-          helper={`${formatCurrency(currentAmountPaid)} paid, ${formatCurrency(currentDueAmount)} due`}
-        />
-        <DashboardCard
-          icon={CircleDollarSign}
-          label="Pending fees"
-          value={formatCurrency(currentDueAmount)}
-          helper="Current month dues"
-        />
-        <DashboardCard
-          icon={CircleDollarSign}
-          label="Monthly fee"
-          value={formatCurrency(currentFeeAmount)}
-          helper={currentFeeRecord ? "From saved fee record" : "From student profile"}
-        />
-        <DashboardCard
-          icon={CalendarDays}
-          label="Date of birth"
-          value={formatDate(student.dateOfBirth || student.joinDate)}
-          helper={`Today: ${
-            todayStatus === "present" ? "Present" : todayStatus === "absent" ? "Absent" : "Not marked"
-          }`}
-        />
-        <DashboardCard
-          icon={Package}
-          label="Equipment dues"
-          value={formatCurrency(equipmentTotals.due)}
-          helper={`${ownEquipmentPurchases.length} purchase records`}
-        />
-        <DashboardCard
-          icon={Megaphone}
-          label="Latest announcements"
-          value={announcements.length}
-          helper={announcements[0]?.title || "No announcements yet"}
-        />
-      </div>
-
-      <StudentAnnouncements announcements={announcements} error={announcementError} />
-
-      <section className="surface p-4">
-        <h3 className="text-lg font-semibold text-white">Student and parent details</h3>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-sm text-neutral-500">Name</dt>
-            <dd className="mt-1 text-white">{student.name || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Student ID</dt>
-            <dd className="mt-1 text-white">{visibleStudentId}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Batch</dt>
-            <dd className="mt-1 text-white">{batch?.name || "Not assigned"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Date of birth</dt>
-            <dd className="mt-1 text-white">
-              {formatDate(student.dateOfBirth || student.joinDate)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Student phone</dt>
-            <dd className="mt-1 text-white">{student.studentPhoneNumber || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Parent name</dt>
-            <dd className="mt-1 text-white">{student.parentName || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Parent phone</dt>
-            <dd className="mt-1 text-white">{student.parentPhoneNumber || "Not added"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Coach</dt>
-            <dd className="mt-1 text-white">{batch?.coach || "Not assigned"}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Monthly fee</dt>
-            <dd className="mt-1 text-white">{formatCurrency(currentFeeAmount)}</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-neutral-500">Pending fees</dt>
-            <dd className="mt-1 text-white">{formatCurrency(currentDueAmount)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <p className="section-title">Attendance</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">My attendance history</h3>
-        </div>
-
-        {ownAttendanceRecords.length === 0 ? (
-          <div className="surface p-4 text-sm text-neutral-400">No attendance records found.</div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {ownAttendanceRecords.map((record) => (
-              <article key={record.id} className="surface p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      {formatDate(record.date)}
-                    </p>
-                    <p className="mt-2 font-medium text-white">{batch?.name || "Student batch"}</p>
-                  </div>
-                  <AttendanceStatusBadge status={record.status} />
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <p className="section-title">Fees</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">My fee history</h3>
-        </div>
-
-        {ownFeeRecords.length === 0 ? (
-          <div className="surface p-4 text-sm text-neutral-400">
-            No saved fee records found for this account.
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {ownFeeRecords.map((record) => (
-              <article key={record.id} className="surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      {formatMonth(record.month)}
-                    </p>
-                    <p className="mt-2 font-medium text-white">{formatCurrency(record.amount)}</p>
-                    <p className="mt-1 text-sm text-neutral-400">
-                      Paid {formatCurrency(record.amountPaid)} | Due {formatCurrency(record.dueAmount)}
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      {record.paymentDate ? formatDate(record.paymentDate) : "Payment pending"}
-                    </p>
-                    {record.notes && <p className="mt-2 text-sm text-neutral-300">{record.notes}</p>}
-                  </div>
-                  <FeeStatusBadge status={record.status} />
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <p className="section-title">Equipment</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">Purchased equipment</h3>
-        </div>
-
-        {ownEquipmentPurchases.length === 0 ? (
-          <div className="surface p-4 text-sm text-neutral-400">
-            No equipment purchases found for this account.
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <DashboardCard
-                icon={Package}
-                label="Equipment total"
-                value={formatCurrency(equipmentTotals.total)}
-                helper="Total purchase value"
-              />
-              <DashboardCard
-                icon={CircleDollarSign}
-                label="Equipment paid"
-                value={formatCurrency(equipmentTotals.paid)}
-                helper="Payment history"
-              />
-              <DashboardCard
-                icon={ClipboardCheck}
-                label="Equipment pending"
-                value={formatCurrency(equipmentTotals.due)}
-                helper="Pending balance"
-              />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {ownEquipmentPurchases.map((purchase) => (
-                <article key={purchase.id} className="surface p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                        {purchase.category}
-                      </p>
-                      <h4 className="mt-2 font-semibold text-white">{purchase.itemName}</h4>
-                      <p className="mt-1 text-sm text-neutral-400">
-                        Purchased {formatDate(purchase.purchaseDate)}
-                      </p>
-                    </div>
-                    <FeeStatusBadge status={purchase.paymentStatus} />
-                  </div>
-                  <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <dt className="text-neutral-500">Total</dt>
-                      <dd className="mt-1 text-white">{formatCurrency(purchase.totalPrice)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-neutral-500">Paid</dt>
-                      <dd className="mt-1 text-white">{formatCurrency(purchase.paidAmount)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-neutral-500">Due</dt>
-                      <dd className="mt-1 text-white">{formatCurrency(purchase.dueAmount)}</dd>
-                    </div>
-                  </dl>
-                  {purchase.notes && (
-                    <p className="mt-3 text-sm text-neutral-300">{purchase.notes}</p>
-                  )}
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
+      {pageMap[activeView] || pageMap.overview}
     </div>
   );
 }

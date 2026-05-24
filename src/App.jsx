@@ -180,7 +180,7 @@ const roleViews = {
     "students",
     "reports",
   ],
-  [ROLES.STUDENT]: ["overview"],
+  [ROLES.STUDENT]: ["overview", "attendance", "fees", "equipment", "announcements"],
 };
 
 function App() {
@@ -1392,16 +1392,29 @@ function StudentPortal({
     navigate("/login", { replace: true });
   }
 
+  const navigation = [
+    { id: "overview", label: "Overview" },
+    { id: "attendance", label: "Attendance" },
+    { id: "fees", label: "Fees" },
+    { id: "equipment", label: "Equipment" },
+    { id: "announcements", label: "Announcements" },
+  ];
+
+  function handleNavigate(view) {
+    navigate(`/student/${view}`);
+  }
+
   return (
     <AppShell
       currentUser={profile}
       activeView={activeView}
-      navigation={[{ id: "overview", label: "Overview" }]}
-      onNavigate={() => navigate(getRoleHomePath(ROLES.STUDENT))}
+      navigation={navigation}
+      onNavigate={handleNavigate}
       onLogout={handleLogout}
     >
       <StudentDashboardErrorBoundary>
         <StudentOverview
+          activeView={activeView}
           attendanceRecords={attendanceRecords}
           attendanceError={attendanceError}
           announcements={announcements}
