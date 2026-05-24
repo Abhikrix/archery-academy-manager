@@ -281,17 +281,23 @@ service cloud.firestore {
       return request.resource.data.keys().hasAll([
           'title',
           'message',
+          'category',
+          'pinned',
           'createdAt',
           'createdBy'
         ])
         && request.resource.data.keys().hasOnly([
           'title',
           'message',
+          'category',
+          'pinned',
           'createdAt',
           'createdBy'
         ])
         && request.resource.data.title is string
         && request.resource.data.message is string
+        && request.resource.data.category in ['Important', 'Tournament', 'Training', 'Fees', 'Holiday']
+        && request.resource.data.pinned is bool
         && request.resource.data.createdAt is timestamp
         && request.resource.data.createdBy is string;
     }

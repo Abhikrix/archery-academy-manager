@@ -1,13 +1,19 @@
 import * as React from "react";
 import {
+  AlertTriangle,
   CalendarDays,
+  CalendarX,
+  ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
+  Dumbbell,
   Megaphone,
   Package,
   Pin,
   Tag,
+  Trophy,
   Users,
+  WalletCards,
 } from "lucide-react";
 import FeeStatusBadge from "./FeeStatusBadge";
 import {
@@ -18,6 +24,35 @@ import {
   getLocalDateKey,
   getLocalMonthKey,
 } from "../utils/formatters";
+
+const ANNOUNCEMENT_CATEGORIES = ["Important", "Tournament", "Training", "Fees", "Holiday"];
+
+const ANNOUNCEMENT_CATEGORY_META = {
+  Important: {
+    icon: AlertTriangle,
+    className: "border-rose-400/35 bg-rose-400/10 text-rose-100",
+  },
+  Tournament: {
+    icon: Trophy,
+    className: "border-academy-gold/45 bg-academy-gold/12 text-academy-gold",
+  },
+  Training: {
+    icon: Dumbbell,
+    className: "border-sky-300/35 bg-sky-300/10 text-sky-100",
+  },
+  Fees: {
+    icon: WalletCards,
+    className: "border-emerald-300/35 bg-emerald-300/10 text-emerald-100",
+  },
+  Holiday: {
+    icon: CalendarX,
+    className: "border-violet-300/35 bg-violet-300/10 text-violet-100",
+  },
+};
+
+function getAnnouncementCategoryMeta(category) {
+  return ANNOUNCEMENT_CATEGORY_META[category] || ANNOUNCEMENT_CATEGORY_META.Important;
+}
 
 function getMonthKeyFromDate(value) {
   return value ? String(value).slice(0, 7) : "";
@@ -77,6 +112,33 @@ function formatDisplayDate(value) {
   }).format(date);
 }
 
+function formatAnnouncementTimestamp(value) {
+  const date = getDate(value);
+
+  if (!date) {
+    return "Just now";
+  }
+
+  const today = new Date();
+  const dateKey = getLocalDateKey(date);
+
+  if (dateKey === getLocalDateKey(today)) {
+    return `Today, ${new Intl.DateTimeFormat("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date)}`;
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (dateKey === getLocalDateKey(yesterday)) {
+    return "Yesterday";
+  }
+
+  return formatDisplayDate(date);
+}
+
 function getTimestampMillis(value) {
   const date = getDate(value);
   return date ? date.getTime() : 0;
@@ -90,15 +152,12 @@ function getAttendanceStatusForDate(attendanceRecords, studentId, date, fallback
 }
 
 function getAnnouncementCategory(announcement) {
-  return String(announcement.category || "Academy").trim() || "Academy";
+  const category = String(announcement.category || "Important").trim();
+  return ANNOUNCEMENT_CATEGORIES.includes(category) ? category : "Important";
 }
 
-function isAnnouncementPinned(announcement, index, hasPinnedAnnouncements) {
-  if (announcement.pinned === true) {
-    return true;
-  }
-
-  return !hasPinnedAnnouncements && index === 0;
+function isAnnouncementPinned(announcement) {
+  return announcement.pinned === true;
 }
 
 function AttendanceStatusBadge({ status }) {
@@ -208,35 +267,93 @@ function ProgressRing({ percentage }) {
   );
 }
 
-function AnnouncementCard({ announcement, isPinned = false }) {
-  const category = getAnnouncementCategory(announcement);
+function AnnouncementCategoryChip({
+  category,
+  count,
+  isActive = false,
+  onClick,
+  pinned = false,
+}) {
+  const categoryName = category === "All" ? "All" : getAnnouncementCategory({ category });
+  const meta = categoryName === "All"
+    ? { icon: Tag, className: "border-white/10 bg-white/[0.04] text-neutral-300" }
+    : getAnnouncementCategoryMeta(categoryName);
+  const Icon = pinned ? Pin : meta.icon;
+  const chipContent = (
+    <>
+      <Icon size={14} />
+      <span>{pinned ? "Pinned" : categoryName}</span>
+      {typeof count === "number" && (
+        <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[10px]">{count}</span>
+      )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-xs font-medium uppercase tracking-[0.1em] transition ${
+          isActive ? "border-academy-gold bg-academy-gold text-black" : meta.className
+        }`}
+        onClick={onClick}
+      >
+        {chipContent}
+      </button>
+    );
+  }
 
   return (
-    <article className="surface min-w-0 overflow-hidden p-4">
+    <span
+      className={`inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] ${meta.className}`}
+    >
+      {chipContent}
+    </span>
+  );
+}
+
+function AnnouncementCard({ announcement, isPinned = false }) {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const category = getAnnouncementCategory(announcement);
+  const message = String(announcement.message || "No message added.").trim();
+  const canExpand = message.length > 180;
+  const displayMessage = canExpand && !isExpanded ? `${message.slice(0, 180).trim()}...` : message;
+
+  return (
+    <article className="surface min-w-0 overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-academy-gold/40 sm:p-5">
       <div className="flex items-start gap-3">
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
           {isPinned ? <Pin size={18} /> : <Megaphone size={18} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-academy-gold/30 bg-academy-gold/10 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-academy-gold">
-              {category}
-            </span>
-            {isPinned && (
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-300">
-                Pinned
-              </span>
-            )}
+            <AnnouncementCategoryChip category={category} />
+            {isPinned && <AnnouncementCategoryChip category={category} pinned />}
           </div>
           <h3 className="mt-3 break-words text-lg font-semibold text-white">
             {announcement.title || "Untitled announcement"}
           </h3>
           <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
-            {announcement.message || "No message added."}
+            {displayMessage}
           </p>
-          <p className="mt-3 text-xs text-neutral-500">
-            {formatDisplayDate(announcement.createdAt)}
-          </p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-medium text-neutral-500">
+              {formatAnnouncementTimestamp(announcement.createdAt)}
+            </p>
+            {canExpand && (
+              <button
+                type="button"
+                className="inline-flex min-h-9 w-fit items-center gap-1 rounded-lg border border-white/10 px-2.5 text-xs font-medium text-neutral-300 transition hover:border-academy-gold/60 hover:text-white"
+                onClick={() => setIsExpanded((current) => !current)}
+              >
+                {isExpanded ? "Show less" : "Read more"}
+                <ChevronDown
+                  size={14}
+                  className={`transition ${isExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -504,27 +621,31 @@ function EquipmentPage({ data }) {
 
 function AnnouncementsPage({ announcementError, announcements }) {
   const [selectedCategory, setSelectedCategory] = React.useState("All");
-  const hasPinnedAnnouncements = announcements.some((announcement) => announcement.pinned === true);
-  const decoratedAnnouncements = announcements.map((announcement, index) => ({
+  const decoratedAnnouncements = announcements.map((announcement) => ({
     ...announcement,
     category: getAnnouncementCategory(announcement),
-    isPinned: isAnnouncementPinned(announcement, index, hasPinnedAnnouncements),
+    isPinned: isAnnouncementPinned(announcement),
   }));
-  const categories = [
-    "All",
-    ...Array.from(new Set(decoratedAnnouncements.map((announcement) => announcement.category))),
-  ];
-  const pinnedAnnouncements = decoratedAnnouncements.filter((announcement) => announcement.isPinned);
+  const categoryCounts = decoratedAnnouncements.reduce(
+    (counts, announcement) => ({
+      ...counts,
+      [announcement.category]: (counts[announcement.category] || 0) + 1,
+    }),
+    {},
+  );
   const visibleAnnouncements =
     selectedCategory === "All"
       ? decoratedAnnouncements
       : decoratedAnnouncements.filter((announcement) => announcement.category === selectedCategory);
+  const pinnedAnnouncements = visibleAnnouncements.filter((announcement) => announcement.isPinned);
+  const regularAnnouncements = visibleAnnouncements.filter((announcement) => !announcement.isPinned);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-2">
       <StudentPageHeader
         eyebrow="Announcements"
         title="Academy updates"
+        helper="Important notices, training updates, fee reminders, and tournament news."
       />
 
       {announcementError && (
@@ -534,64 +655,74 @@ function AnnouncementsPage({ announcementError, announcements }) {
       )}
 
       {decoratedAnnouncements.length === 0 ? (
-        <EmptyState>No announcements have been published yet.</EmptyState>
+        <EmptyState>
+          No announcements have been published yet. New academy updates will appear here first.
+        </EmptyState>
       ) : (
         <>
           <section className="space-y-3">
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <Tag size={16} className="shrink-0 text-academy-gold" />
-              {categories.map((category) => (
-                <button
+              <AnnouncementCategoryChip
+                category="All"
+                count={decoratedAnnouncements.length}
+                isActive={selectedCategory === "All"}
+                onClick={() => setSelectedCategory("All")}
+              />
+              {ANNOUNCEMENT_CATEGORIES.map((category) => (
+                <AnnouncementCategoryChip
                   key={category}
-                  type="button"
-                  className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition ${
-                    selectedCategory === category
-                      ? "border-academy-gold bg-academy-gold text-black"
-                      : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-academy-gold/60 hover:text-white"
-                  }`}
+                  category={category}
+                  count={categoryCounts[category] || 0}
+                  isActive={selectedCategory === category}
                   onClick={() => setSelectedCategory(category)}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {pinnedAnnouncements.length > 0 && (
-            <section className="space-y-3">
-              <div>
-                <p className="section-title">Pinned</p>
-                <h3 className="mt-2 text-lg font-semibold text-white">Important notices</h3>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {pinnedAnnouncements.slice(0, 2).map((announcement) => (
-                  <AnnouncementCard
-                    key={announcement.id}
-                    announcement={announcement}
-                    isPinned={announcement.isPinned}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section className="space-y-3">
-            <div>
-              <p className="section-title">Feed</p>
-              <h3 className="mt-2 text-lg font-semibold text-white">
-                {selectedCategory === "All" ? "All announcements" : selectedCategory}
-              </h3>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {visibleAnnouncements.map((announcement) => (
-                <AnnouncementCard
-                  key={announcement.id}
-                  announcement={announcement}
-                  isPinned={announcement.isPinned}
                 />
               ))}
             </div>
           </section>
+
+          {visibleAnnouncements.length === 0 ? (
+            <EmptyState>No {selectedCategory.toLowerCase()} announcements are available.</EmptyState>
+          ) : (
+            <>
+              {pinnedAnnouncements.length > 0 && (
+                <section className="space-y-3">
+                  <div>
+                    <p className="section-title">Pinned</p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">Important notices</h3>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {pinnedAnnouncements.map((announcement) => (
+                      <AnnouncementCard
+                        key={announcement.id}
+                        announcement={announcement}
+                        isPinned={announcement.isPinned}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {regularAnnouncements.length > 0 && (
+                <section className="space-y-3">
+                  <div>
+                    <p className="section-title">Feed</p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">
+                      {selectedCategory === "All" ? "All announcements" : selectedCategory}
+                    </h3>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {regularAnnouncements.map((announcement) => (
+                      <AnnouncementCard
+                        key={announcement.id}
+                        announcement={announcement}
+                        isPinned={announcement.isPinned}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
         </>
       )}
     </div>
@@ -713,7 +844,13 @@ export default function StudentOverview({
     .filter((record) => record.studentId === student.id)
     .sort((first, second) => String(second.purchaseDate).localeCompare(String(first.purchaseDate)));
   const sortedAnnouncements = [...announcements].sort(
-    (first, second) => getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt),
+    (first, second) => {
+      if (Boolean(first.pinned) !== Boolean(second.pinned)) {
+        return first.pinned ? -1 : 1;
+      }
+
+      return getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt);
+    },
   );
   const equipmentTotals = ownEquipmentPurchases.reduce(
     (summary, purchase) => ({

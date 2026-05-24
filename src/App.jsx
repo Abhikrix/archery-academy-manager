@@ -1,20 +1,26 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CalendarDays,
+  CalendarX,
   CircleDollarSign,
   ClipboardCheck,
   Download,
+  Dumbbell,
   Megaphone,
   Package,
   Pencil,
+  Pin,
   Search,
   Save,
   ShoppingCart,
   TrendingUp,
   Trash2,
+  Trophy,
   UserPlus,
   Users,
+  WalletCards,
 } from "lucide-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AppShell from "./components/AppShell";
@@ -71,6 +77,84 @@ import {
   saveUserProfile,
   subscribeToUserProfiles,
 } from "./services/authService";
+
+const ANNOUNCEMENT_CATEGORIES = ["Important", "Tournament", "Training", "Fees", "Holiday"];
+
+const ANNOUNCEMENT_CATEGORY_META = {
+  Important: {
+    icon: AlertTriangle,
+    className: "border-rose-400/35 bg-rose-400/10 text-rose-100",
+  },
+  Tournament: {
+    icon: Trophy,
+    className: "border-academy-gold/45 bg-academy-gold/12 text-academy-gold",
+  },
+  Training: {
+    icon: Dumbbell,
+    className: "border-sky-300/35 bg-sky-300/10 text-sky-100",
+  },
+  Fees: {
+    icon: WalletCards,
+    className: "border-emerald-300/35 bg-emerald-300/10 text-emerald-100",
+  },
+  Holiday: {
+    icon: CalendarX,
+    className: "border-violet-300/35 bg-violet-300/10 text-violet-100",
+  },
+};
+
+function getAnnouncementCategoryMeta(category) {
+  return ANNOUNCEMENT_CATEGORY_META[category] || ANNOUNCEMENT_CATEGORY_META.Important;
+}
+
+function getDateFromTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  const date = new Date(String(value).includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatAnnouncementTimestamp(value) {
+  const date = getDateFromTimestamp(value);
+
+  if (!date) {
+    return "Just now";
+  }
+
+  const today = new Date();
+  const todayKey = getLocalDateKey(today);
+  const dateKey = getLocalDateKey(date);
+
+  if (dateKey === todayKey) {
+    return `Today, ${new Intl.DateTimeFormat("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date)}`;
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (dateKey === getLocalDateKey(yesterday)) {
+    return "Yesterday";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
 
 function getDefaultStudentForm() {
   return {
@@ -134,6 +218,8 @@ function getDefaultAnnouncementForm() {
     id: "",
     title: "",
     message: "",
+    category: "Important",
+    pinned: false,
     createdAt: null,
     createdBy: "",
   };
@@ -516,6 +602,10 @@ function App() {
       ...announcement,
       title: announcement.title || "",
       message: announcement.message || "",
+      category: ANNOUNCEMENT_CATEGORIES.includes(announcement.category)
+        ? announcement.category
+        : "Important",
+      pinned: Boolean(announcement.pinned),
     });
   }
 
@@ -1840,6 +1930,31 @@ function LoadingScreen() {
   );
 }
 
+function AnnouncementCategoryBadge({ category, pinned = false }) {
+  const categoryName = ANNOUNCEMENT_CATEGORIES.includes(category) ? category : "Important";
+  const meta = getAnnouncementCategoryMeta(categoryName);
+  const Icon = meta.icon;
+
+  return (
+    <span
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em] ${meta.className}`}
+    >
+      {pinned ? <Pin size={12} /> : <Icon size={12} />}
+      <span className="truncate">{pinned ? "Pinned" : categoryName}</span>
+    </span>
+  );
+}
+
+function getAnnouncementPreview(message, limit = 150) {
+  const text = String(message || "").trim();
+
+  if (text.length <= limit) {
+    return text;
+  }
+
+  return `${text.slice(0, limit).trim()}...`;
+}
+
 function LatestAnnouncementsPanel({ announcements = [], error = "", isLoading = false, limit = 3 }) {
   const latestAnnouncements = announcements.slice(0, limit);
 
@@ -1862,24 +1977,34 @@ function LatestAnnouncementsPanel({ announcements = [], error = "", isLoading = 
       {isLoading ? (
         <div className="surface p-4 text-sm text-neutral-400">Loading announcements...</div>
       ) : latestAnnouncements.length === 0 ? (
-        <div className="surface p-4 text-sm text-neutral-400">
-          No announcements have been published yet.
+        <div className="surface p-5 text-sm leading-6 text-neutral-400">
+          No announcements have been published yet. New academy notices will appear here.
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           {latestAnnouncements.map((announcement) => (
-            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
+            <article
+              key={announcement.id}
+              className="surface min-w-0 overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-academy-gold/40"
+            >
               <div className="flex items-start gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-academy-gold/12 text-academy-gold">
-                  <Megaphone size={18} />
+                  {announcement.pinned ? <Pin size={18} /> : <Megaphone size={18} />}
                 </span>
                 <div className="min-w-0">
-                  <h3 className="break-words font-semibold text-white">{announcement.title}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <AnnouncementCategoryBadge category={announcement.category} />
+                    {announcement.pinned && <AnnouncementCategoryBadge category={announcement.category} pinned />}
+                  </div>
+                  <h3 className="mt-3 break-words text-base font-semibold text-white">
+                    {announcement.title}
+                  </h3>
                   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
-                    {announcement.message}
+                    {getAnnouncementPreview(announcement.message)}
                   </p>
-                  <p className="mt-3 text-xs text-neutral-500">
-                    {formatDate(announcement.createdAt)} by {announcement.createdBy || "Admin"}
+                  <p className="mt-3 text-xs font-medium text-neutral-500">
+                    {formatAnnouncementTimestamp(announcement.createdAt)} by{" "}
+                    {announcement.createdBy || "Admin"}
                   </p>
                 </div>
               </div>
@@ -2731,7 +2856,7 @@ function AnnouncementsManagementView({
           </h3>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="grid gap-4 lg:grid-cols-[0.85fr_0.55fr_1.2fr]">
           <label className="block">
             <span className="mb-2 block text-sm text-neutral-400">Title</span>
             <input
@@ -2743,6 +2868,20 @@ function AnnouncementsManagementView({
             />
           </label>
           <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Category</span>
+            <select
+              className="field w-full"
+              value={announcementForm.category || "Important"}
+              onChange={(event) => updateForm({ category: event.target.value })}
+            >
+              {ANNOUNCEMENT_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
             <span className="mb-2 block text-sm text-neutral-400">Message</span>
             <textarea
               className="field min-h-24 w-full resize-y py-3"
@@ -2752,6 +2891,27 @@ function AnnouncementsManagementView({
               required
             />
           </label>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-white">Pin announcement</p>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">
+              Pinned notices stay above regular updates on dashboards and student portal.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition ${
+              announcementForm.pinned
+                ? "border-academy-gold bg-academy-gold text-black"
+                : "border-white/10 bg-white/[0.03] text-neutral-300 hover:border-academy-gold/60 hover:text-white"
+            }`}
+            onClick={() => updateForm({ pinned: !announcementForm.pinned })}
+          >
+            <Pin size={16} />
+            {announcementForm.pinned ? "Pinned" : "Not pinned"}
+          </button>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -2786,24 +2946,33 @@ function AnnouncementsManagementView({
       {isLoadingAnnouncements ? (
         <div className="surface p-4 text-sm text-neutral-400">Loading announcements...</div>
       ) : announcements.length === 0 ? (
-        <div className="surface p-4 text-sm text-neutral-400">
-          No announcements have been published yet.
+        <div className="surface p-5 text-sm leading-6 text-neutral-400">
+          No announcements have been published yet. Use the form above to create the first academy notice.
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {announcements.map((announcement) => (
-            <article key={announcement.id} className="surface min-w-0 overflow-hidden p-4">
+            <article
+              key={announcement.id}
+              className="surface min-w-0 overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-academy-gold/40"
+            >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <p className="section-title">{formatDate(announcement.createdAt)}</p>
-                  <h3 className="mt-2 break-words text-lg font-semibold text-white">
+                  <div className="flex flex-wrap gap-2">
+                    <AnnouncementCategoryBadge category={announcement.category} />
+                    {announcement.pinned && (
+                      <AnnouncementCategoryBadge category={announcement.category} pinned />
+                    )}
+                  </div>
+                  <h3 className="mt-3 break-words text-lg font-semibold text-white">
                     {announcement.title}
                   </h3>
                   <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-neutral-300">
-                    {announcement.message}
+                    {getAnnouncementPreview(announcement.message, 220)}
                   </p>
                   <p className="mt-3 text-xs text-neutral-500">
-                    Created by {announcement.createdBy || "Admin"}
+                    {formatAnnouncementTimestamp(announcement.createdAt)} | Created by{" "}
+                    {announcement.createdBy || "Admin"}
                   </p>
                 </div>
                 <div className="grid shrink-0 gap-2 sm:w-36">

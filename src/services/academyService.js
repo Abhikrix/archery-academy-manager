@@ -139,9 +139,13 @@ function getTimestampMillis(value) {
 }
 
 function sortAnnouncements(records) {
-  return [...records].sort(
-    (first, second) => getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt),
-  );
+  return [...records].sort((first, second) => {
+    if (Boolean(first.pinned) !== Boolean(second.pinned)) {
+      return first.pinned ? -1 : 1;
+    }
+
+    return getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt);
+  });
 }
 
 export function getInitialAcademySnapshot() {
@@ -285,10 +289,15 @@ export function upsertEquipmentPurchaseRecord(records, nextRecord) {
 }
 
 export function createAnnouncementRecord(record) {
+  const allowedCategories = new Set(["Important", "Tournament", "Training", "Fees", "Holiday"]);
+  const category = String(record.category || "Important").trim();
+
   return {
     id: String(record.id || "").trim() || getAnnouncementId(),
     title: String(record.title || "").trim(),
     message: String(record.message || "").trim(),
+    category: allowedCategories.has(category) ? category : "Important",
+    pinned: Boolean(record.pinned),
     createdAt: record.createdAt || null,
     createdBy: String(record.createdBy || "").trim(),
   };
@@ -560,6 +569,8 @@ export async function saveAnnouncementRecord(record) {
   await setDoc(doc(db, "announcements", normalizedRecord.id), {
     title: normalizedRecord.title,
     message: normalizedRecord.message,
+    category: normalizedRecord.category,
+    pinned: normalizedRecord.pinned,
     createdAt: normalizedRecord.createdAt || serverTimestamp(),
     createdBy: normalizedRecord.createdBy,
   });
