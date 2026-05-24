@@ -39,7 +39,7 @@ export default function LoginView() {
         alt=""
         decoding="async"
         fetchPriority="high"
-        className="absolute inset-0 h-full w-full object-cover object-center"
+        className="absolute inset-0 h-full w-full object-cover object-center animate-cinematic-zoom"
       />
       <div className="login-overlay absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.88)_38%,rgba(0,0,0,0.52)_68%,rgba(0,0,0,0.78)_100%)]" />
 
@@ -48,7 +48,7 @@ export default function LoginView() {
       </div>
 
       <div className="relative flex min-h-screen items-center px-4 py-6 sm:px-6 lg:px-10">
-        <section className="w-full max-w-md">
+        <section className="w-full max-w-md animate-fade-in-up">
           <p className="section-title">ARCOS ARCHERY ACADEMY</p>
           <h1 className="mt-4 text-3xl font-semibold leading-tight text-white sm:text-4xl">
             Sign in
@@ -57,7 +57,7 @@ export default function LoginView() {
             Use your academy account to continue.
           </p>
 
-          <form className="surface mt-8 space-y-4 p-4 sm:p-5" onSubmit={handleSubmit}>
+          <form className="surface mt-8 space-y-4 p-4 sm:p-5 animate-float" onSubmit={handleSubmit}>
             <label className="block">
               <span className="mb-2 block text-sm text-neutral-400">Email</span>
               <span className="relative block">
@@ -96,10 +96,29 @@ export default function LoginView() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition-all duration-200 hover:bg-white/[0.04] hover:text-[rgb(var(--academy-gold))] focus:bg-white/[0.08] focus:text-[rgb(var(--academy-gold))] focus:outline-none active:scale-95"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition-all duration-250 hover:bg-white/[0.04] hover:text-[rgb(var(--academy-gold))] focus:bg-white/[0.08] focus:text-[rgb(var(--academy-gold))] focus:outline-none active:scale-90 hover:scale-105"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  <span className="relative flex h-5 w-5 items-center justify-center">
+                    <span
+                      className={`absolute transition-all duration-300 transform ${
+                        showPassword
+                          ? "pointer-events-none rotate-45 scale-75 opacity-0"
+                          : "rotate-0 scale-100 opacity-100"
+                      }`}
+                    >
+                      <Eye size={18} />
+                    </span>
+                    <span
+                      className={`absolute transition-all duration-300 transform ${
+                        showPassword
+                          ? "rotate-0 scale-100 opacity-100"
+                          : "pointer-events-none -rotate-45 scale-75 opacity-0"
+                      }`}
+                    >
+                      <EyeOff size={18} />
+                    </span>
+                  </span>
                 </button>
               </span>
             </label>
