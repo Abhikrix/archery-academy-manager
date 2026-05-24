@@ -251,7 +251,7 @@ function OverviewPage({ data }) {
       <StudentPageHeader
         eyebrow="Overview"
         title={data.student.name || "Student dashboard"}
-        helper="A cleaner read-only snapshot for students and parents."
+        helper=""
       />
 
       <ProfileCard
