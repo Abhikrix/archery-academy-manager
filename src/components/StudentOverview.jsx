@@ -23,6 +23,21 @@ function getPercentage(value, total) {
   return Math.round((value / total) * 100);
 }
 
+function getVisibleStudentId(student) {
+  const studentId = String(student.studentId || "").trim();
+  const documentId = String(student.id || "").trim();
+
+  if (studentId && studentId !== documentId) {
+    return studentId;
+  }
+
+  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
+    return documentId;
+  }
+
+  return "Student ID not added";
+}
+
 function getAttendanceStatusForDate(attendanceRecords, studentId, date, fallback = "") {
   return (
     attendanceRecords.find((record) => record.studentId === studentId && record.date === date)
@@ -120,6 +135,7 @@ export default function StudentOverview({
   }
 
   const batch = getBatchById(batches, student.batchId);
+  const visibleStudentId = getVisibleStudentId(student);
   const todayStatus = getAttendanceStatusForDate(
     attendanceRecords,
     student.id,
@@ -245,7 +261,7 @@ export default function StudentOverview({
           </div>
           <div>
             <dt className="text-sm text-neutral-500">Student ID</dt>
-            <dd className="mt-1 text-white">{student.id}</dd>
+            <dd className="mt-1 text-white">{visibleStudentId}</dd>
           </div>
           <div>
             <dt className="text-sm text-neutral-500">Batch</dt>

@@ -97,6 +97,7 @@ function getDefaultStudentAccountForm() {
   return {
     email: "",
     password: "",
+    studentId: "",
     name: "",
     batchId: "junior-a",
     parentName: "",
@@ -124,6 +125,21 @@ function getDefaultEquipmentForm() {
 
 function getProfileStudentId(profile) {
   return profile?.uid || "";
+}
+
+function getVisibleStudentId(student) {
+  const studentId = String(student?.studentId || "").trim();
+  const documentId = String(student?.id || "").trim();
+
+  if (studentId && studentId !== documentId) {
+    return studentId;
+  }
+
+  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
+    return documentId;
+  }
+
+  return "Student ID not added";
 }
 
 const roleViews = {
@@ -600,6 +616,11 @@ function App() {
 
     if (!normalizedStudent.dateOfBirth) {
       setStudentError("Date of birth is required.");
+      return;
+    }
+
+    if (!normalizedStudent.studentId) {
+      setStudentError("Student ID is required.");
       return;
     }
 
@@ -1290,6 +1311,7 @@ function getMonthlyFeeRows(students, feeRecords, month) {
       id: record?.id || `${student.id}_${month}`,
       student,
       studentId: student.id,
+      displayStudentId: getVisibleStudentId(student),
       studentName: record?.studentName || student.name,
       month,
       amount,
@@ -1306,12 +1328,16 @@ function getMonthlyFeeRows(students, feeRecords, month) {
 }
 
 function getFeeHistoryRows(students, feeRecords) {
-  return feeRecords.map((record) => ({
-    ...record,
-    student: students.find((student) => student.id === record.studentId),
-    studentName:
-      record.studentName || students.find((student) => student.id === record.studentId)?.name || record.studentId,
-  }));
+  return feeRecords.map((record) => {
+    const student = students.find((item) => item.id === record.studentId);
+
+    return {
+      ...record,
+      student,
+      displayStudentId: student ? getVisibleStudentId(student) : record.studentId,
+      studentName: record.studentName || student?.name || record.studentId,
+    };
+  });
 }
 
 function getEquipmentSummary(purchases) {
@@ -1508,7 +1534,7 @@ function openPrintableReport(title, sections) {
       </head>
       <body>
         <h1>${escapeHtml(title)}</h1>
-        <p>Generated from Archery Academy live reports</p>
+        <p>Generated from ARCOS ARCHERY ACADEMY live reports</p>
         ${body}
       </body>
     </html>
@@ -1656,13 +1682,18 @@ function DashboardOverview({ attendanceRecords, equipmentPurchases, feeRecords, 
             );
 
             return (
-              <div key={student.id} className="surface flex items-center justify-between gap-4 p-4">
-                <div>
-                  <p className="text-sm text-neutral-500">{student.id}</p>
+              <div
+                key={student.id}
+                className="surface flex min-w-0 items-center justify-between gap-4 overflow-hidden p-4"
+              >
+                <div className="min-w-0">
+                  <p className="break-words text-sm text-neutral-500">
+                    {getVisibleStudentId(student)}
+                  </p>
                   <p className="mt-1 font-medium text-white">{student.name}</p>
                   <p className="mt-1 text-sm text-neutral-400">{batch?.name}</p>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <FeeStatusBadge status={feeRecord?.status || "pending"} />
                   <p className="mt-3 text-sm capitalize text-neutral-300">
                     {todayStatus}
@@ -1689,36 +1720,40 @@ function DashboardOverview({ attendanceRecords, equipmentPurchases, feeRecords, 
           </div>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {recentEquipmentPurchases.map((purchase) => (
-              <article key={purchase.id} className="surface p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-                      {purchase.category}
-                    </p>
-                    <h3 className="mt-2 font-semibold text-white">{purchase.itemName}</h3>
-                    <p className="mt-1 text-sm text-neutral-400">
-                      {purchase.studentName || purchase.studentId}
-                    </p>
+            {recentEquipmentPurchases.map((purchase) => {
+              const student = students.find((record) => record.id === purchase.studentId);
+
+              return (
+                <article key={purchase.id} className="surface p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                        {purchase.category}
+                      </p>
+                      <h3 className="mt-2 font-semibold text-white">{purchase.itemName}</h3>
+                      <p className="mt-1 text-sm text-neutral-400">
+                        {purchase.studentName || getVisibleStudentId(student)}
+                      </p>
+                    </div>
+                    <FeeStatusBadge status={purchase.paymentStatus} />
                   </div>
-                  <FeeStatusBadge status={purchase.paymentStatus} />
-                </div>
-                <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <dt className="text-neutral-500">Paid</dt>
-                    <dd className="mt-1 text-white">{formatCurrency(purchase.paidAmount)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-neutral-500">Due</dt>
-                    <dd className="mt-1 text-white">{formatCurrency(purchase.dueAmount)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-neutral-500">Date</dt>
-                    <dd className="mt-1 text-white">{formatDate(purchase.purchaseDate)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
+                  <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <dt className="text-neutral-500">Paid</dt>
+                      <dd className="mt-1 text-white">{formatCurrency(purchase.paidAmount)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Due</dt>
+                      <dd className="mt-1 text-white">{formatCurrency(purchase.dueAmount)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-neutral-500">Date</dt>
+                      <dd className="mt-1 text-white">{formatDate(purchase.purchaseDate)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
@@ -1807,6 +1842,7 @@ function AttendanceHistoryView({ attendanceRecords, batches, isLoadingAttendance
     return {
       ...record,
       batch: getBatchById(batches, student?.batchId),
+      displayStudentId: student ? getVisibleStudentId(student) : record.studentId,
       student,
     };
   });
@@ -1847,7 +1883,9 @@ function AttendanceHistoryView({ attendanceRecords, batches, isLoadingAttendance
                     <span className="block font-medium text-white">
                       {row.student?.name || row.studentId}
                     </span>
-                    <span className="mt-1 block text-xs text-neutral-500">{row.studentId}</span>
+                    <span className="mt-1 block text-xs text-neutral-500">
+                      {row.displayStudentId}
+                    </span>
                   </span>
                   <span className="text-neutral-300">{row.batch?.name || "Not assigned"}</span>
                   <AttendanceStatusBadge status={row.status} />
@@ -1867,7 +1905,9 @@ function AttendanceHistoryView({ attendanceRecords, batches, isLoadingAttendance
                     <h3 className="mt-2 font-semibold text-white">
                       {row.student?.name || row.studentId}
                     </h3>
-                    <p className="mt-1 text-sm text-neutral-400">{row.batch?.name}</p>
+                    <p className="mt-1 text-sm text-neutral-400">
+                      {row.batch?.name || row.displayStudentId}
+                    </p>
                   </div>
                   <AttendanceStatusBadge status={row.status} />
                 </div>
@@ -1899,14 +1939,15 @@ function FeesView({
   const normalizedSearch = feeSearch.trim().toLowerCase();
   const filteredMonthlyRows = monthlyRows.filter((row) => {
     const batch = getBatchById(batches, row.student.batchId);
-    const searchText = `${row.student.name} ${row.student.id} ${batch?.name || ""}`.toLowerCase();
+    const searchText =
+      `${row.student.name} ${row.displayStudentId} ${batch?.name || ""}`.toLowerCase();
     const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
     const matchesStatus = statusFilter === "all" || row.status === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
   const historyRows = getFeeHistoryRows(students, feeRecords).filter((row) => {
-    const searchText = `${row.studentName} ${row.studentId}`.toLowerCase();
+    const searchText = `${row.studentName} ${row.displayStudentId}`.toLowerCase();
     return row.month === feeMonth && (!normalizedSearch || searchText.includes(normalizedSearch));
   });
 
@@ -1985,7 +2026,7 @@ function FeesView({
         "Updated By",
       ],
       ...monthlyRows.map((row) => [
-        row.studentId,
+        row.displayStudentId,
         row.studentName,
         row.month,
         row.amount,
@@ -2131,7 +2172,7 @@ function FeesView({
                   >
                     <div>
                       <p className="font-medium text-white">{row.student.name}</p>
-                      <p className="mt-1 text-sm text-neutral-500">{row.student.id}</p>
+                      <p className="mt-1 text-sm text-neutral-500">{row.displayStudentId}</p>
                     </div>
                     <p className="text-sm text-neutral-300">{batch?.name}</p>
                     <p className="text-sm text-white">{formatCurrency(editableRow.amount)}</p>
@@ -2241,7 +2282,7 @@ function FeesView({
                             {row.studentName || row.studentId}
                           </span>
                           <span className="mt-1 block text-xs text-neutral-500">
-                            {row.studentId}
+                            {row.displayStudentId}
                           </span>
                         </span>
                         <span className="text-white">{formatCurrency(row.amount)}</span>
@@ -2321,7 +2362,10 @@ function EquipmentPurchasesView({
   const filteredPurchases = equipmentPurchases.filter((purchase) => {
     const student = students.find((record) => record.id === purchase.studentId);
     const batch = getBatchById(batches, student?.batchId);
-    const searchText = `${purchase.itemName} ${purchase.category} ${purchase.studentName} ${purchase.studentId} ${batch?.name || ""}`.toLowerCase();
+    const searchText =
+      `${purchase.itemName} ${purchase.category} ${purchase.studentName} ${
+        student ? getVisibleStudentId(student) : purchase.studentId
+      } ${batch?.name || ""}`.toLowerCase();
     const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
     const matchesStatus = statusFilter === "all" || purchase.paymentStatus === statusFilter;
 
@@ -2423,7 +2467,7 @@ function EquipmentPurchasesView({
             <option value="">Select student</option>
             {students.map((student) => (
               <option key={student.id} value={student.id}>
-                {student.name} - {student.id}
+                {student.name} - {getVisibleStudentId(student)}
               </option>
             ))}
           </select>
@@ -2580,7 +2624,7 @@ function EquipmentPurchasesView({
                       {purchase.studentName || purchase.studentId}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      {batch?.name || purchase.studentId}
+                      {batch?.name || (student ? getVisibleStudentId(student) : purchase.studentId)}
                     </p>
                   </div>
                   <p className="text-sm text-white">{formatCurrency(purchase.totalPrice)}</p>
@@ -2667,7 +2711,7 @@ function UsersManagementView({
 
       <form className="surface space-y-5 p-4" onSubmit={onSubmitStudentAccount}>
         <div>
-          <p className="section-title">Create Student Account</p>
+          <p className="section-title">Add User</p>
           <h3 className="mt-2 text-lg font-semibold text-white">Auth + profile setup</h3>
           <p className="mt-2 text-sm leading-6 text-neutral-400">
             Creates the Firebase Auth login, users UID profile, and students UID dashboard record.
@@ -2715,6 +2759,22 @@ function UsersManagementView({
               value={studentAccountForm.name}
               onChange={(event) =>
                 onStudentAccountFormChange({ ...studentAccountForm, name: event.target.value })
+              }
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Student ID</span>
+            <input
+              className="field w-full"
+              placeholder="ARC-001"
+              value={studentAccountForm.studentId}
+              onChange={(event) =>
+                onStudentAccountFormChange({
+                  ...studentAccountForm,
+                  studentId: event.target.value,
+                })
               }
               required
             />
@@ -3046,7 +3106,7 @@ function UsersManagementView({
                     {user.role === ROLES.STUDENT && (
                       <div>
                         <dt className="text-neutral-500">Student ID</dt>
-                        <dd className="mt-1 text-white">{user.studentId || user.uid}</dd>
+                        <dd className="mt-1 text-white">{user.studentId || "Not added"}</dd>
                       </div>
                     )}
                   </dl>
@@ -3093,34 +3153,97 @@ function StudentsView({
   onEdit,
   onDelete,
 }) {
+  const [studentSearch, setStudentSearch] = useState("");
+  const [batchFilter, setBatchFilter] = useState("all");
+  const [feeStatusFilter, setFeeStatusFilter] = useState("all");
+  const normalizedSearch = studentSearch.trim().toLowerCase();
+  const filteredStudents = students.filter((student) => {
+    const batch = getBatchById(batches, student.batchId);
+    const visibleStudentId = student.studentId || "";
+    const searchText =
+      `${visibleStudentId} ${student.name} ${student.parentName} ${batch?.name || ""}`.toLowerCase();
+    const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
+    const matchesBatch = batchFilter === "all" || student.batchId === batchFilter;
+    const matchesFeeStatus = feeStatusFilter === "all" || student.feeStatus === feeStatusFilter;
+
+    return matchesSearch && matchesBatch && matchesFeeStatus;
+  });
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="section-title">Students</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Student list</h2>
+          <h2 className="mt-2 text-xl font-semibold text-white">Student records</h2>
+          <p className="mt-2 text-sm text-neutral-400">
+            Student accounts are created from Users. Manage existing student profiles here.
+          </p>
         </div>
-        <p className="text-sm text-neutral-400">{students.length} enrolled</p>
+        <p className="text-sm text-neutral-400">
+          {filteredStudents.length}/{students.length} records
+        </p>
       </section>
 
-      {canManageStudents && (
+      <section className="surface grid gap-3 p-4 lg:grid-cols-[1fr_180px_180px] lg:items-end">
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Search students</span>
+          <span className="relative block">
+            <Search
+              size={18}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
+            />
+            <input
+              className="field w-full pl-10"
+              placeholder="Search by ID, name, parent, or batch"
+              value={studentSearch}
+              onChange={(event) => setStudentSearch(event.target.value)}
+            />
+          </span>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Batch</span>
+          <select
+            className="field w-full"
+            value={batchFilter}
+            onChange={(event) => setBatchFilter(event.target.value)}
+          >
+            <option value="all">All batches</option>
+            {batches.map((batch) => (
+              <option key={batch.id} value={batch.id}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm text-neutral-400">Fee status</span>
+          <select
+            className="field w-full"
+            value={feeStatusFilter}
+            onChange={(event) => setFeeStatusFilter(event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+          </select>
+        </label>
+      </section>
+
+      {canManageStudents && editingStudentId && (
         <form className="surface space-y-5 p-4" onSubmit={onSubmit}>
           <div>
-            <p className="section-title">{editingStudentId ? "Edit student" : "Add student"}</p>
-            <h3 className="mt-2 text-lg font-semibold text-white">
-              {editingStudentId ? studentForm.name : "New student"}
-            </h3>
+            <p className="section-title">Edit student</p>
+            <h3 className="mt-2 text-lg font-semibold text-white">{studentForm.name}</h3>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="block">
               <span className="mb-2 block text-sm text-neutral-400">Student ID</span>
               <input
-                className="field w-full disabled:cursor-not-allowed disabled:opacity-60"
-                placeholder="ST-107"
-                value={studentForm.id}
-                onChange={(event) => onFormChange({ ...studentForm, id: event.target.value })}
-                disabled={Boolean(editingStudentId)}
+                className="field w-full"
+                placeholder="ARC-001"
+                value={studentForm.studentId || ""}
+                onChange={(event) => onFormChange({ ...studentForm, studentId: event.target.value })}
                 required
               />
             </label>
@@ -3229,21 +3352,15 @@ function StudentsView({
                 disabled={isSavingStudent}
               >
                 <UserPlus size={16} />
-                {isSavingStudent
-                  ? "Saving..."
-                  : editingStudentId
-                    ? "Update student"
-                    : "Add student"}
+                {isSavingStudent ? "Saving..." : "Update student"}
               </button>
-              {editingStudentId && (
-                <button
-                  type="button"
-                  className="ghost-button min-h-11 w-full sm:w-auto"
-                  onClick={onCancel}
-                >
-                  Cancel
-                </button>
-              )}
+              <button
+                type="button"
+                className="ghost-button min-h-11 w-full sm:w-auto"
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
             </div>
           </div>
 
@@ -3262,20 +3379,19 @@ function StudentsView({
       )}
 
       <section className="space-y-4">
-        <div>
-          <p className="section-title">Roster</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">Student records</h3>
-        </div>
-
         {isLoadingStudents ? (
           <div className="surface p-4 text-sm text-neutral-400">Loading students...</div>
         ) : students.length === 0 ? (
           <div className="surface p-4 text-sm text-neutral-400">
-            No students have been added yet.
+            No student accounts have been created yet.
+          </div>
+        ) : filteredStudents.length === 0 ? (
+          <div className="surface p-4 text-sm text-neutral-400">
+            No student records match the current filters.
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {students.map((student) => (
+          <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredStudents.map((student) => (
               <StudentCard
                 key={student.id}
                 student={student}
@@ -3389,7 +3505,7 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
       title: "Student Attendance",
       headers: ["Student ID", "Student", "Present", "Absent", "Marked", "Percentage"],
       rows: studentAttendanceRows.map((row) => [
-        row.student.id,
+        getVisibleStudentId(row.student),
         row.student.name,
         row.present,
         row.absent,
@@ -3413,7 +3529,7 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
       title: isAdmin ? "Fee Summary" : "Fee Status",
       headers: ["Student ID", "Student", "Amount", "Paid", "Due", "Status"],
       rows: analytics.feeRows.map((row) => [
-        row.studentId,
+        row.displayStudentId,
         row.studentName,
         row.amount,
         isAdmin ? row.amountPaid : row.status === "paid" ? "Paid" : "Pending",
@@ -3435,7 +3551,7 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
   }
 
   function exportReportsPdf() {
-    const didOpen = openPrintableReport(`Archery Academy Reports - ${formatMonth(reportMonth)}`, exportSections);
+    const didOpen = openPrintableReport(`ARCOS ARCHERY ACADEMY Reports - ${formatMonth(reportMonth)}`, exportSections);
     setReportNotice(
       didOpen
         ? "PDF export opened. Choose Save as PDF in the print dialog."
@@ -3581,7 +3697,9 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
               >
                 <span>
                   <span className="block font-medium text-white">{row.student.name}</span>
-                  <span className="mt-1 block text-xs text-neutral-500">{row.student.id}</span>
+                  <span className="mt-1 block text-xs text-neutral-500">
+                    {getVisibleStudentId(row.student)}
+                  </span>
                 </span>
                 <span className="text-white">{row.present}</span>
                 <span className="text-white">{row.absent}</span>
@@ -3595,7 +3713,9 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
         <div className="grid gap-3 md:hidden">
           {studentAttendanceRows.map((row) => (
             <article key={row.student.id} className="surface p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">{row.student.id}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                {getVisibleStudentId(row.student)}
+              </p>
               <h4 className="mt-2 font-semibold text-white">{row.student.name}</h4>
               <div className="mt-4">
                 <ProgressBar
@@ -3689,7 +3809,7 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
                 <div key={row.id} className="flex items-center justify-between gap-4 p-4 text-sm">
                   <div>
                     <p className="font-medium text-white">{row.studentName}</p>
-                    <p className="mt-1 text-neutral-500">{row.studentId}</p>
+                    <p className="mt-1 text-neutral-500">{row.displayStudentId}</p>
                   </div>
                   <div className="text-right">
                     <FeeStatusBadge status={row.status} />

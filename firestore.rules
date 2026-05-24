@@ -120,7 +120,7 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.id == studentId
-        && request.resource.data.studentId == studentId
+        && request.resource.data.studentId is string
         && request.resource.data.name is string
         && request.resource.data.batch is string
         && request.resource.data.parentName is string

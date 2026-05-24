@@ -223,6 +223,7 @@ export async function createStudentAccount(account) {
   const normalizedAccount = {
     email: String(account.email || "").trim(),
     password: String(account.password || ""),
+    studentId: String(account.studentId || "").trim(),
     name: String(account.name || "").trim(),
     batchId: String(account.batchId || account.batch || "").trim(),
     parentName: String(account.parentName || "").trim(),
@@ -246,6 +247,10 @@ export async function createStudentAccount(account) {
     throw new Error("Student name is required.");
   }
 
+  if (!normalizedAccount.studentId) {
+    throw new Error("Student ID is required.");
+  }
+
   if (!normalizedAccount.batchId) {
     throw new Error("Batch is required.");
   }
@@ -266,11 +271,12 @@ export async function createStudentAccount(account) {
       name: normalizedAccount.name,
       email: normalizedAccount.email,
       role: ROLES.STUDENT,
+      studentId: normalizedAccount.studentId,
       createdAt: serverTimestamp(),
     };
     const studentPayload = {
       id: uid,
-      studentId: uid,
+      studentId: normalizedAccount.studentId,
       name: normalizedAccount.name,
       batch: normalizedAccount.batchId,
       batchId: normalizedAccount.batchId,

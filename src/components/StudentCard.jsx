@@ -4,6 +4,21 @@ import AttendanceButtonGroup from "./AttendanceButtonGroup";
 import FeeStatusBadge from "./FeeStatusBadge";
 import { formatCurrency, formatDate } from "../utils/formatters";
 
+function getVisibleStudentId(student) {
+  const studentId = String(student.studentId || "").trim();
+  const documentId = String(student.id || "").trim();
+
+  if (studentId && studentId !== documentId) {
+    return studentId;
+  }
+
+  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
+    return documentId;
+  }
+
+  return "Student ID not added";
+}
+
 export default function StudentCard({
   student,
   batch,
@@ -13,12 +28,14 @@ export default function StudentCard({
   onEdit,
   onDelete,
 }) {
+  const visibleStudentId = getVisibleStudentId(student);
+
   return (
     <article className="surface min-w-0 overflow-hidden p-4">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="break-words text-xs uppercase tracking-[0.18em] text-neutral-500">
-            {student.id}
+            {visibleStudentId}
           </p>
           <h3 className="mt-2 break-words text-lg font-semibold text-white">{student.name}</h3>
           <p className="mt-1 break-words text-sm text-neutral-400">{batch?.name}</p>

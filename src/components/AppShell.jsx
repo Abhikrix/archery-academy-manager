@@ -44,7 +44,7 @@ export default function AppShell({
       <header className="border-b border-white/5 bg-black/60 px-4 py-4 backdrop-blur md:hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="section-title">Archery Academy</p>
+            <p className="section-title">ARCOS ARCHERY ACADEMY</p>
             <div className="mt-2">
               <RoleBadge role={shellUser.role} />
             </div>
@@ -64,7 +64,7 @@ export default function AppShell({
       <div className="mx-auto grid min-h-screen max-w-[1440px] md:grid-cols-[260px_1fr]">
         <aside className="hidden border-r border-white/5 bg-black/45 p-5 md:flex md:flex-col">
           <div>
-            <p className="section-title">Archery Academy</p>
+            <p className="section-title">ARCOS ARCHERY ACADEMY</p>
             <h1 className="mt-3 text-xl font-semibold text-white">{shellTitle}</h1>
             <p className="mt-2 text-sm text-neutral-400">{shellUser.name}</p>
             <div className="mt-3">

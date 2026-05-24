@@ -43,7 +43,7 @@ export default function LoginView() {
 
       <div className="relative flex min-h-screen items-center px-4 py-6 sm:px-6 lg:px-10">
         <section className="w-full max-w-md">
-          <p className="section-title">Archery Academy</p>
+          <p className="section-title">ARCOS ARCHERY ACADEMY</p>
           <h1 className="mt-4 text-3xl font-semibold leading-tight text-white sm:text-4xl">
             Sign in
           </h1>
