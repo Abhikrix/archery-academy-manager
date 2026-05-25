@@ -24,6 +24,7 @@ const defaultStudentValues = {
   feeStatus: "pending",
   monthlyFee: 0,
   pendingFees: 0,
+  photoUrl: "",
   attendanceStatus: "present",
   attendanceRate: 0,
 };
@@ -315,6 +316,7 @@ export function upsertAnnouncementRecord(records, nextRecord) {
 }
 
 export function createStudentRecord(student) {
+  const { photoFile, photoPreviewUrl, ...studentData } = student;
   const id = String(student.id || student.uid || student.studentId || "").trim();
   const feeAmount = Number(student.feeAmount ?? student.monthlyFee ?? 0);
   const parentPhone = String(student.parentPhone || student.parentPhoneNumber || "").trim();
@@ -326,7 +328,7 @@ export function createStudentRecord(student) {
 
   return {
     ...defaultStudentValues,
-    ...student,
+    ...studentData,
     id,
     studentId: String(student.studentId || id).trim(),
     name: String(student.name || "").trim(),
@@ -340,6 +342,7 @@ export function createStudentRecord(student) {
     feeAmount,
     monthlyFee: Number(student.monthlyFee ?? feeAmount),
     pendingFees: Number(student.pendingFees ?? 0),
+    photoUrl: String(student.photoUrl || "").trim(),
     dateOfBirth,
     joinDate: dateOfBirth,
   };

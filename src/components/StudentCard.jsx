@@ -2,6 +2,7 @@ import * as React from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import AttendanceButtonGroup from "./AttendanceButtonGroup";
 import FeeStatusBadge from "./FeeStatusBadge";
+import StudentAvatar from "./StudentAvatar";
 import { formatCurrency, formatDate } from "../utils/formatters";
 
 function getVisibleStudentId(student) {
@@ -32,16 +33,19 @@ export default function StudentCard({
 
   return (
     <article className="surface min-w-0 overflow-hidden p-4">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="break-words text-xs uppercase tracking-[0.18em] text-neutral-500">
-            {visibleStudentId}
-          </p>
-          <h3 className="mt-2 break-words text-lg font-semibold text-white">{student.name}</h3>
-          <p className="mt-1 break-words text-sm text-neutral-400">{batch?.name}</p>
-        </div>
-        <div className="flex max-w-full shrink-0 justify-end">
-          <FeeStatusBadge status={student.feeStatus} />
+      <div className="flex min-w-0 items-start gap-3">
+        <StudentAvatar student={student} size="md" />
+        <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-xs uppercase tracking-[0.18em] text-neutral-500">
+              {visibleStudentId}
+            </p>
+            <h3 className="mt-2 break-words text-lg font-semibold text-white">{student.name}</h3>
+            <p className="mt-1 break-words text-sm text-neutral-400">{batch?.name}</p>
+          </div>
+          <div className="flex max-w-full shrink-0 justify-end">
+            <FeeStatusBadge status={student.feeStatus} />
+          </div>
         </div>
       </div>
 

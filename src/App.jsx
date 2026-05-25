@@ -31,6 +31,7 @@ import LoginView from "./components/LoginView";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleBadge from "./components/RoleBadge";
 import StudentCard from "./components/StudentCard";
+import StudentAvatar from "./components/StudentAvatar";
 import StudentOverview from "./components/StudentOverview";
 import { PERMISSIONS, ROLES } from "./constants/roles";
 import { useAuth } from "./context/AuthContext";
@@ -78,6 +79,7 @@ import {
   saveUserProfile,
   subscribeToUserProfiles,
 } from "./services/authService";
+import { uploadStudentPhoto } from "./services/studentPhotoService";
 
 const ANNOUNCEMENT_CATEGORIES = ["Important", "Tournament", "Training", "Fees", "Holiday"];
 
@@ -167,6 +169,9 @@ function getDefaultStudentForm() {
     batchId: "junior-a",
     feeAmount: "2800",
     dateOfBirth: "",
+    photoUrl: "",
+    photoFile: null,
+    photoPreviewUrl: "",
     feeStatus: "pending",
     attendanceStatus: "present",
     attendanceRate: 0,
@@ -198,6 +203,8 @@ function getDefaultStudentAccountForm() {
     monthlyFee: "2800",
     pendingFees: "0",
     feeStatus: "pending",
+    photoFile: null,
+    photoPreviewUrl: "",
   };
 }
 
@@ -267,6 +274,33 @@ function compareStudentsByStudentId(first, second) {
   return String(first?.name || "").localeCompare(String(second?.name || ""), undefined, {
     sensitivity: "base",
   });
+}
+
+function revokePhotoPreviewUrl(form) {
+  if (
+    typeof URL !== "undefined" &&
+    typeof form?.photoPreviewUrl === "string" &&
+    form.photoPreviewUrl.startsWith("blob:")
+  ) {
+    URL.revokeObjectURL(form.photoPreviewUrl);
+  }
+}
+
+function withSelectedPhotoFile(form, file) {
+  revokePhotoPreviewUrl(form);
+
+  return {
+    ...form,
+    photoFile: file || null,
+    photoPreviewUrl: file && typeof URL !== "undefined" ? URL.createObjectURL(file) : "",
+  };
+}
+
+function getPhotoPreviewStudent(form) {
+  return {
+    name: form?.name,
+    photoUrl: form?.photoPreviewUrl || form?.photoUrl || "",
+  };
 }
 
 const roleViews = {
@@ -834,14 +868,18 @@ function App() {
   }
 
   function startEditing(student) {
+    revokePhotoPreviewUrl(studentForm);
     setEditingStudentId(student.id);
     setStudentForm({
       ...student,
       feeAmount: String(student.feeAmount),
+      photoFile: null,
+      photoPreviewUrl: "",
     });
   }
 
   function resetStudentForm() {
+    revokePhotoPreviewUrl(studentForm);
     setEditingStudentId(null);
     setStudentForm(getDefaultStudentForm());
   }
@@ -887,8 +925,12 @@ function App() {
       setIsSavingStudent(true);
 
       try {
+        const nextPhotoUrl = studentForm.photoFile
+          ? await uploadStudentPhoto(studentForm.photoFile, editingStudentId || normalizedStudent.id)
+          : normalizedStudent.photoUrl;
         await saveStudentRecord({
           ...normalizedStudent,
+          photoUrl: nextPhotoUrl,
           id: editingStudentId || normalizedStudent.id,
         });
         setStudentNotice(editingStudentId ? "Student updated." : "Student added.");
@@ -903,11 +945,20 @@ function App() {
 
     if (editingStudentId) {
       setStudents((currentStudents) =>
-        updateStudentRecord(currentStudents, editingStudentId, normalizedStudent),
+        updateStudentRecord(currentStudents, editingStudentId, {
+          ...normalizedStudent,
+          photoUrl: studentForm.photoPreviewUrl || normalizedStudent.photoUrl,
+        }),
       );
       setStudentNotice("Student updated locally.");
     } else {
-      setStudents((currentStudents) => [...currentStudents, normalizedStudent]);
+      setStudents((currentStudents) => [
+        ...currentStudents,
+        {
+          ...normalizedStudent,
+          photoUrl: studentForm.photoPreviewUrl || normalizedStudent.photoUrl,
+        },
+      ]);
       setStudentNotice("Student added locally.");
     }
 
@@ -973,6 +1024,7 @@ function App() {
       setStudentAccountNotice(
         `${createdAccount.name} student account created. UID: ${createdAccount.uid}`,
       );
+      revokePhotoPreviewUrl(studentAccountForm);
       setStudentAccountForm(getDefaultStudentAccountForm());
     } catch (error) {
       setStudentAccountError(error.message);
@@ -3370,6 +3422,33 @@ function formatProfileCreatedAt(value) {
   }).format(date);
 }
 
+function StudentPhotoUploadField({ form, label = "Student photo", onChange }) {
+  const selectedFileName = form.photoFile?.name || "";
+
+  return (
+    <label className="block md:col-span-2 xl:col-span-2">
+      <span className="mb-2 block text-sm text-neutral-400">{label}</span>
+      <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center">
+        <StudentAvatar student={getPhotoPreviewStudent(form)} size="lg" />
+        <div className="min-w-0 flex-1">
+          <input
+            key={form.photoPreviewUrl || form.photoUrl || "empty-photo"}
+            className="field h-auto min-h-11 w-full py-2"
+            type="file"
+            accept="image/*"
+            onChange={(event) => onChange(event.target.files?.[0] || null)}
+          />
+          <p className="mt-2 break-words text-xs leading-5 text-neutral-500">
+            {selectedFileName
+              ? `${selectedFileName} selected. It will be optimized before upload.`
+              : "Upload a clear square or portrait image. Photos are stored as optimized JPG files."}
+          </p>
+        </div>
+      </div>
+    </label>
+  );
+}
+
 function UsersManagementView({
   batches,
   currentUserId,
@@ -3474,6 +3553,13 @@ function UsersManagementView({
               required
             />
           </label>
+
+          <StudentPhotoUploadField
+            form={studentAccountForm}
+            onChange={(file) =>
+              onStudentAccountFormChange(withSelectedPhotoFile(studentAccountForm, file))
+            }
+          />
 
           <label className="block">
             <span className="mb-2 block text-sm text-neutral-400">Batch</span>
@@ -3953,6 +4039,11 @@ function StudentsView({
                 required
               />
             </label>
+
+            <StudentPhotoUploadField
+              form={studentForm}
+              onChange={(file) => onFormChange(withSelectedPhotoFile(studentForm, file))}
+            />
 
             <label className="block">
               <span className="mb-2 block text-sm text-neutral-400">Parent name</span>

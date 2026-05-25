@@ -1,6 +1,5 @@
-import * as React from "react";
-import { UserRound } from "lucide-react";
 import AttendanceButtonGroup from "./AttendanceButtonGroup";
+import StudentAvatar from "./StudentAvatar";
 
 function getVisibleStudentId(student) {
   const studentId = String(student?.studentId || "").trim();
@@ -17,57 +16,6 @@ function getVisibleStudentId(student) {
   return "Student ID not added";
 }
 
-function getStudentPhotoUrl(student) {
-  const possibleFields = [
-    student?.photoUrl,
-    student?.photoURL,
-    student?.profilePhotoUrl,
-    student?.profilePhoto,
-    student?.studentPhotoUrl,
-    student?.studentPhoto,
-    student?.avatarUrl,
-    student?.imageUrl,
-    student?.photo,
-  ];
-
-  return possibleFields.find((value) => typeof value === "string" && value.trim()) || "";
-}
-
-function getInitials(name) {
-  const parts = String(name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  return parts.map((part) => part[0]?.toUpperCase()).join("");
-}
-
-function StudentAvatar({ student }) {
-  const [imageFailed, setImageFailed] = React.useState(false);
-  const photoUrl = getStudentPhotoUrl(student);
-  const initials = getInitials(student?.name);
-  const showPhoto = photoUrl && !imageFailed;
-
-  return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-academy-gold/35 bg-academy-gold/10 text-academy-gold">
-      {showPhoto ? (
-        <img
-          src={photoUrl}
-          alt={student?.name ? `${student.name} profile` : "Student profile"}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          onError={() => setImageFailed(true)}
-        />
-      ) : initials ? (
-        <span className="text-sm font-semibold">{initials}</span>
-      ) : (
-        <UserRound size={20} aria-hidden="true" />
-      )}
-    </div>
-  );
-}
-
 export default function AttendanceStudentCard({ student, batch, onAttendanceChange }) {
   const visibleStudentId = getVisibleStudentId(student);
   const batchName = batch?.name || student?.batchName || student?.batch || "No batch";
@@ -75,7 +23,7 @@ export default function AttendanceStudentCard({ student, batch, onAttendanceChan
   return (
     <article className="attendance-student-card surface min-w-0 overflow-hidden p-3">
       <div className="flex min-w-0 items-center gap-3">
-        <StudentAvatar student={student} />
+        <StudentAvatar student={student} size="sm" />
 
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold leading-5 text-white">

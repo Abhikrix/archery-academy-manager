@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { auth, db, firebaseApiKey, isFirebaseConfigured } from "../config/firebase";
 import { ROLES } from "../constants/roles";
+import { uploadStudentPhoto } from "./studentPhotoService";
 
 const allowedRoles = new Set(Object.values(ROLES));
 
@@ -233,6 +234,7 @@ export async function createStudentAccount(account) {
     monthlyFee: Number(account.monthlyFee ?? account.feeAmount ?? 0),
     pendingFees: Number(account.pendingFees ?? 0),
     feeStatus: account.feeStatus === "paid" ? "paid" : "pending",
+    photoFile: account.photoFile || null,
   };
 
   if (!normalizedAccount.email) {
@@ -266,6 +268,9 @@ export async function createStudentAccount(account) {
   const uid = createdAuthUser.uid;
 
   try {
+    const photoUrl = normalizedAccount.photoFile
+      ? await uploadStudentPhoto(normalizedAccount.photoFile, uid)
+      : "";
     const userPayload = {
       uid,
       name: normalizedAccount.name,
@@ -289,6 +294,7 @@ export async function createStudentAccount(account) {
       parentPhoneNumber: normalizedAccount.parentPhone,
       studentPhone: normalizedAccount.studentPhone,
       studentPhoneNumber: normalizedAccount.studentPhone,
+      photoUrl,
       dateOfBirth: normalizedAccount.dateOfBirth,
       joinDate: normalizedAccount.dateOfBirth,
       attendanceStatus: "present",

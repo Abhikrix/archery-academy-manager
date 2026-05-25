@@ -88,6 +88,7 @@ service cloud.firestore {
           'batchId',
           'monthlyFee',
           'pendingFees',
+          'photoUrl',
           'feeAmount',
           'dateOfBirth',
           'joinDate',
@@ -110,6 +111,7 @@ service cloud.firestore {
           'batchId',
           'monthlyFee',
           'pendingFees',
+          'photoUrl',
           'feeAmount',
           'dateOfBirth',
           'joinDate',
@@ -137,6 +139,7 @@ service cloud.firestore {
         && request.resource.data.monthlyFee == request.resource.data.feeAmount
         && request.resource.data.pendingFees is number
         && request.resource.data.pendingFees >= 0
+        && request.resource.data.photoUrl is string
         && request.resource.data.parentPhone == request.resource.data.parentPhoneNumber
         && request.resource.data.studentPhone == request.resource.data.studentPhoneNumber
         && request.resource.data.dateOfBirth is string

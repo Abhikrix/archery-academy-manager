@@ -16,6 +16,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import FeeStatusBadge from "./FeeStatusBadge";
+import StudentAvatar from "./StudentAvatar";
 import {
   formatCurrency,
   formatDate,
@@ -211,14 +212,17 @@ function ProfileCard({ batch, student, visibleStudentId }) {
   return (
     <section className="surface overflow-hidden p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="section-title">Student + Parent</p>
-          <h3 className="mt-2 break-words text-2xl font-semibold text-white">
-            {student.name || "Student profile"}
-          </h3>
-          <p className="mt-2 break-words text-sm text-neutral-400">
-            {batch?.name || "Batch not assigned"} | {visibleStudentId}
-          </p>
+        <div className="flex min-w-0 items-center gap-4">
+          <StudentAvatar student={student} size="lg" />
+          <div className="min-w-0">
+            <p className="section-title">Student + Parent</p>
+            <h3 className="mt-2 break-words text-2xl font-semibold text-white">
+              {student.name || "Student profile"}
+            </h3>
+            <p className="mt-2 break-words text-sm text-neutral-400">
+              {batch?.name || "Batch not assigned"} | {visibleStudentId}
+            </p>
+          </div>
         </div>
         <span className="inline-flex w-fit items-center rounded-full border border-academy-gold/40 bg-academy-gold/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-academy-gold">
           Read only

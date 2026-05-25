@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 function readEnv(name) {
   return String(import.meta.env[name] || "").trim();
@@ -22,3 +23,4 @@ const firebaseApp = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;
+export const storage = firebaseApp ? getStorage(firebaseApp) : null;
