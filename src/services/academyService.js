@@ -12,6 +12,7 @@ import {
 import { db, isFirebaseConfigured } from "../config/firebase";
 import { batches, students } from "../data/mockData";
 import { getLocalDateKey, getLocalMonthKey } from "../utils/formatters";
+import { getStudentMonthlyFeeSummary, sortStudentsByVisibleId } from "../utils/studentRecords";
 
 const defaultStudentValues = {
   parentName: "",
@@ -152,7 +153,7 @@ function sortAnnouncements(records) {
 export function getInitialAcademySnapshot() {
   return {
     batches,
-    students: students.map(createStudentRecord),
+    students: sortStudentsByVisibleId(students.map(createStudentRecord)),
   };
 }
 
@@ -223,19 +224,21 @@ export function createFeeRecord(record) {
 }
 
 export function createInitialFeeRecords(studentsState, month = getLocalMonthKey()) {
-  return studentsState.map((student) =>
-    createFeeRecord({
+  return sortStudentsByVisibleId(studentsState).map((student) => {
+    const feeSummary = getStudentMonthlyFeeSummary(student, null);
+
+    return createFeeRecord({
       studentId: student.id,
       studentName: student.name,
       month,
-      amount: student.feeAmount,
-      amountPaid: student.feeStatus === "paid" ? student.feeAmount : 0,
-      status: student.feeStatus || "pending",
-      paymentDate: student.feeStatus === "paid" ? getLocalDateKey() : "",
+      amount: feeSummary.amount,
+      amountPaid: feeSummary.amountPaid,
+      status: feeSummary.status,
+      paymentDate: feeSummary.status === "paid" ? getLocalDateKey() : "",
       notes: "",
       updatedBy: "Local roster",
-    }),
-  );
+    });
+  });
 }
 
 export function upsertFeeRecord(records, nextRecord) {
@@ -367,9 +370,7 @@ export function subscribeToStudentRecords(onStudents, onError) {
     studentsQuery,
     (snapshot) => {
       onStudents(
-        snapshot.docs
-          .map(normalizeStudentSnapshot)
-          .sort((first, second) => first.name.localeCompare(second.name)),
+        sortStudentsByVisibleId(snapshot.docs.map(normalizeStudentSnapshot)),
       );
     },
     onError,

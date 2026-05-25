@@ -1,20 +1,6 @@
 import AttendanceButtonGroup from "./AttendanceButtonGroup";
 import StudentAvatar from "./StudentAvatar";
-
-function getVisibleStudentId(student) {
-  const studentId = String(student?.studentId || "").trim();
-  const documentId = String(student?.id || "").trim();
-
-  if (studentId && studentId !== documentId) {
-    return studentId;
-  }
-
-  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
-    return documentId;
-  }
-
-  return "Student ID not added";
-}
+import { getVisibleStudentId } from "../utils/studentRecords";
 
 export default function AttendanceStudentCard({ student, batch, onAttendanceChange }) {
   const visibleStudentId = getVisibleStudentId(student);

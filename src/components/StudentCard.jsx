@@ -4,21 +4,7 @@ import AttendanceButtonGroup from "./AttendanceButtonGroup";
 import FeeStatusBadge from "./FeeStatusBadge";
 import StudentAvatar from "./StudentAvatar";
 import { formatCurrency, formatDate } from "../utils/formatters";
-
-function getVisibleStudentId(student) {
-  const studentId = String(student.studentId || "").trim();
-  const documentId = String(student.id || "").trim();
-
-  if (studentId && studentId !== documentId) {
-    return studentId;
-  }
-
-  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
-    return documentId;
-  }
-
-  return "Student ID not added";
-}
+import { getVisibleStudentId } from "../utils/studentRecords";
 
 export default function StudentCard({
   student,

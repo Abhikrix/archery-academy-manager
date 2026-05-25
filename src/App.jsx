@@ -73,6 +73,13 @@ import {
   getLocalDateKey,
   getLocalMonthKey,
 } from "./utils/formatters";
+import {
+  compareStudentsByVisibleId,
+  getStudentFeeSummaryForMonth,
+  getStudentMonthlyFeeSummary,
+  getVisibleStudentId,
+  sortStudentsByVisibleId,
+} from "./utils/studentRecords";
 import { getRoleHomePath } from "./utils/roleRoutes";
 import {
   createStudentAccount,
@@ -236,45 +243,6 @@ function getDefaultAnnouncementForm() {
 
 function getProfileStudentId(profile) {
   return profile?.uid || "";
-}
-
-function getVisibleStudentId(student) {
-  const studentId = String(student?.studentId || "").trim();
-  const documentId = String(student?.id || "").trim();
-
-  if (studentId && studentId !== documentId) {
-    return studentId;
-  }
-
-  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
-    return documentId;
-  }
-
-  return "Student ID not added";
-}
-
-function compareStudentsByStudentId(first, second) {
-  const firstStudentId = getVisibleStudentId(first);
-  const secondStudentId = getVisibleStudentId(second);
-  const firstMissing = firstStudentId === "Student ID not added";
-  const secondMissing = secondStudentId === "Student ID not added";
-
-  if (firstMissing !== secondMissing) {
-    return firstMissing ? 1 : -1;
-  }
-
-  const idComparison = firstStudentId.localeCompare(secondStudentId, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-
-  if (idComparison !== 0) {
-    return idComparison;
-  }
-
-  return String(first?.name || "").localeCompare(String(second?.name || ""), undefined, {
-    sensitivity: "base",
-  });
 }
 
 function revokePhotoPreviewUrl(form) {
@@ -1469,6 +1437,7 @@ function ManagementPortal({
       {activeView === "students" && permissions.canViewStudents && (
         <StudentsView
           students={students}
+          feeRecords={feeRecords}
           batches={batches}
           canManageStudents={permissions.canManageStudents}
           studentForm={studentForm}
@@ -1704,11 +1673,9 @@ function getFeeSummary(rows) {
 }
 
 function getMonthlyFeeRows(students, feeRecords, month) {
-  return students.map((student) => {
+  return sortStudentsByVisibleId(students).map((student) => {
     const record = feeRecords.find((item) => item.studentId === student.id && item.month === month);
-    const amount = record?.amount ?? student.feeAmount;
-    const amountPaid = record?.amountPaid ?? (record?.status === "paid" ? amount : 0);
-    const dueAmount = record?.dueAmount ?? Math.max(amount - amountPaid, 0);
+    const feeSummary = getStudentFeeSummaryForMonth(student, feeRecords, month);
 
     return {
       id: record?.id || `${student.id}_${month}`,
@@ -1717,30 +1684,51 @@ function getMonthlyFeeRows(students, feeRecords, month) {
       displayStudentId: getVisibleStudentId(student),
       studentName: record?.studentName || student.name,
       month,
-      amount,
-      amountPaid,
-      dueAmount,
-      status: record?.status || (dueAmount <= 0 ? "paid" : "pending"),
-      paymentDate: record?.paymentDate || "",
-      notes: record?.notes || "",
-      updatedBy: record?.updatedBy || "",
-      timestamp: record?.timestamp || null,
-      isSaved: Boolean(record),
+      amount: feeSummary.amount,
+      amountPaid: feeSummary.amountPaid,
+      dueAmount: feeSummary.dueAmount,
+      status: feeSummary.status,
+      paymentDate: feeSummary.paymentDate,
+      notes: feeSummary.notes,
+      updatedBy: feeSummary.updatedBy,
+      timestamp: feeSummary.timestamp,
+      isSaved: feeSummary.isSaved,
     };
   });
 }
 
 function getFeeHistoryRows(students, feeRecords) {
-  return feeRecords.map((record) => {
-    const student = students.find((item) => item.id === record.studentId);
+  return feeRecords
+    .map((record) => {
+      const student = students.find((item) => item.id === record.studentId);
+      const feeSummary = getStudentMonthlyFeeSummary(student, record);
 
-    return {
-      ...record,
-      student,
-      displayStudentId: student ? getVisibleStudentId(student) : record.studentId,
-      studentName: record.studentName || student?.name || record.studentId,
-    };
-  });
+      return {
+        ...record,
+        amount: feeSummary.amount,
+        amountPaid: feeSummary.amountPaid,
+        dueAmount: feeSummary.dueAmount,
+        status: feeSummary.status,
+        student,
+        displayStudentId: student ? getVisibleStudentId(student) : record.studentId,
+        studentName: record.studentName || student?.name || record.studentId,
+      };
+    })
+    .sort((first, second) => {
+      if (Boolean(first.student) !== Boolean(second.student)) {
+        return first.student ? -1 : 1;
+      }
+
+      if (first.student && second.student) {
+        return compareStudentsByVisibleId(first.student, second.student);
+      }
+
+      return String(first.displayStudentId || "").localeCompare(
+        String(second.displayStudentId || ""),
+        undefined,
+        { numeric: true, sensitivity: "base" },
+      );
+    });
 }
 
 function getEquipmentSummary(purchases) {
@@ -1794,7 +1782,7 @@ function getMonthRange(monthCount = 6, endDate = new Date()) {
 }
 
 function getStudentAttendanceRows(students, attendanceRecords, month) {
-  return students
+  return sortStudentsByVisibleId(students)
     .map((student) => {
       const records = attendanceRecords.filter(
         (record) => record.studentId === student.id && getMonthKeyFromDate(record.date) === month,
@@ -1809,8 +1797,7 @@ function getStudentAttendanceRows(students, attendanceRecords, month) {
         absent,
         percentage: getPercentage(present, records.length),
       };
-    })
-    .sort((first, second) => second.percentage - first.percentage || first.student.name.localeCompare(second.student.name));
+    });
 }
 
 function getBatchAttendanceRows(batches, students, attendanceRecords, month) {
@@ -2164,7 +2151,7 @@ function DashboardOverview({
   students,
   batches,
 }) {
-  const recentStudents = students.slice(0, 4);
+  const recentStudents = sortStudentsByVisibleId(students).slice(0, 4);
   const todayDate = getLocalDateKey();
   const recentEquipmentPurchases = metrics.recentEquipmentPurchases || getRecentEquipmentPurchases(equipmentPurchases);
 
@@ -2235,9 +2222,7 @@ function DashboardOverview({
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {recentStudents.map((student) => {
             const batch = getBatchById(batches, student.batchId);
-            const feeRecord = feeRecords.find(
-              (record) => record.studentId === student.id && record.month === getLocalMonthKey(),
-            );
+            const feeSummary = getStudentFeeSummaryForMonth(student, feeRecords, getLocalMonthKey());
             const todayStatus = getAttendanceStatusForDate(
               attendanceRecords,
               student.id,
@@ -2258,7 +2243,7 @@ function DashboardOverview({
                   <p className="mt-1 text-sm text-neutral-400">{batch?.name}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <FeeStatusBadge status={feeRecord?.status || "pending"} />
+                  <FeeStatusBadge status={feeSummary.status} />
                   <p className="mt-3 text-sm capitalize text-neutral-300">
                     {todayStatus}
                   </p>
@@ -2338,7 +2323,7 @@ function AttendanceView({
 }) {
   const summary = getAttendanceSummary(attendanceRecords, attendanceDate, students);
   const sortedStudents = useMemo(
-    () => [...students].sort(compareStudentsByStudentId),
+    () => sortStudentsByVisibleId(students),
     [students],
   );
 
@@ -3105,6 +3090,7 @@ function EquipmentPurchasesView({
   const [purchaseSearch, setPurchaseSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const summary = getEquipmentSummary(equipmentPurchases);
+  const sortedStudents = useMemo(() => sortStudentsByVisibleId(students), [students]);
   const selectedStudent = students.find((student) => student.id === equipmentForm.studentId);
   const formTotalPrice = Math.max(Number(equipmentForm.totalPrice || 0) || 0, 0);
   const formPaidAmount = Math.min(
@@ -3113,18 +3099,44 @@ function EquipmentPurchasesView({
   );
   const formDueAmount = Math.max(formTotalPrice - formPaidAmount, 0);
   const normalizedSearch = purchaseSearch.trim().toLowerCase();
-  const filteredPurchases = equipmentPurchases.filter((purchase) => {
-    const student = students.find((record) => record.id === purchase.studentId);
-    const batch = getBatchById(batches, student?.batchId);
-    const searchText =
-      `${purchase.itemName} ${purchase.category} ${purchase.studentName} ${
-        student ? getVisibleStudentId(student) : purchase.studentId
-      } ${batch?.name || ""}`.toLowerCase();
-    const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
-    const matchesStatus = statusFilter === "all" || purchase.paymentStatus === statusFilter;
+  const filteredPurchases = equipmentPurchases
+    .filter((purchase) => {
+      const student = students.find((record) => record.id === purchase.studentId);
+      const batch = getBatchById(batches, student?.batchId);
+      const searchText =
+        `${purchase.itemName} ${purchase.category} ${purchase.studentName} ${
+          student ? getVisibleStudentId(student) : purchase.studentId
+        } ${batch?.name || ""}`.toLowerCase();
+      const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);
+      const matchesStatus = statusFilter === "all" || purchase.paymentStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    })
+    .sort((first, second) => {
+      const firstStudent = students.find((record) => record.id === first.studentId);
+      const secondStudent = students.find((record) => record.id === second.studentId);
+
+      if (Boolean(firstStudent) !== Boolean(secondStudent)) {
+        return firstStudent ? -1 : 1;
+      }
+
+      if (firstStudent && secondStudent) {
+        const studentComparison = compareStudentsByVisibleId(firstStudent, secondStudent);
+
+        if (studentComparison !== 0) {
+          return studentComparison;
+        }
+      }
+
+      if (first.purchaseDate !== second.purchaseDate) {
+        return String(second.purchaseDate || "").localeCompare(String(first.purchaseDate || ""));
+      }
+
+      return String(first.itemName || "").localeCompare(String(second.itemName || ""), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
 
   function updateForm(patch) {
     onFormChange((currentForm) => ({
@@ -3219,7 +3231,7 @@ function EquipmentPurchasesView({
             required
           >
             <option value="">Select student</option>
-            {students.map((student) => (
+            {sortedStudents.map((student) => (
               <option key={student.id} value={student.id}>
                 {student.name} - {getVisibleStudentId(student)}
               </option>
@@ -3926,6 +3938,7 @@ function UsersManagementView({
 
 function StudentsView({
   students,
+  feeRecords,
   batches,
   canManageStudents,
   studentForm,
@@ -3945,9 +3958,23 @@ function StudentsView({
   const [batchFilter, setBatchFilter] = useState("all");
   const [feeStatusFilter, setFeeStatusFilter] = useState("all");
   const normalizedSearch = studentSearch.trim().toLowerCase();
-  const filteredStudents = students.filter((student) => {
+  const studentsWithCurrentFeeStatus = useMemo(
+    () =>
+      sortStudentsByVisibleId(students).map((student) => {
+        const feeSummary = getStudentFeeSummaryForMonth(student, feeRecords, getLocalMonthKey());
+
+        return {
+          ...student,
+          feeStatus: feeSummary.status,
+          currentFeeDueAmount: feeSummary.dueAmount,
+          currentFeeAmountPaid: feeSummary.amountPaid,
+        };
+      }),
+    [feeRecords, students],
+  );
+  const filteredStudents = studentsWithCurrentFeeStatus.filter((student) => {
     const batch = getBatchById(batches, student.batchId);
-    const visibleStudentId = student.studentId || "";
+    const visibleStudentId = getVisibleStudentId(student);
     const searchText =
       `${visibleStudentId} ${student.name} ${student.parentName} ${batch?.name || ""}`.toLowerCase();
     const matchesSearch = !normalizedSearch || searchText.includes(normalizedSearch);

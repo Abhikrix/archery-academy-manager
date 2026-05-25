@@ -25,6 +25,11 @@ import {
   getLocalDateKey,
   getLocalMonthKey,
 } from "../utils/formatters";
+import {
+  getStudentFeeSummaryForMonth,
+  getStudentMonthlyFeeSummary,
+  getVisibleStudentId,
+} from "../utils/studentRecords";
 
 const ANNOUNCEMENT_CATEGORIES = ["Important", "Tournament", "Training", "Fees", "Holiday"];
 
@@ -65,21 +70,6 @@ function getPercentage(value, total) {
   }
 
   return Math.round((value / total) * 100);
-}
-
-function getVisibleStudentId(student) {
-  const studentId = String(student.studentId || "").trim();
-  const documentId = String(student.id || "").trim();
-
-  if (studentId && studentId !== documentId) {
-    return studentId;
-  }
-
-  if (/^(ST|ARC)-/i.test(documentId) || documentId.length <= 12) {
-    return documentId;
-  }
-
-  return "Student ID not added";
 }
 
 function getDate(value) {
@@ -208,7 +198,7 @@ function MetricCard({ icon: Icon, label, value, helper }) {
   );
 }
 
-function ProfileCard({ batch, student, visibleStudentId }) {
+function ProfileCard({ batch, currentDueAmount, currentFeeStatus, student, visibleStudentId }) {
   return (
     <section className="surface overflow-hidden p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -237,8 +227,8 @@ function ProfileCard({ batch, student, visibleStudentId }) {
           ["Date of birth", formatDate(student.dateOfBirth || student.joinDate)],
           ["Coach", batch?.coach || "Not assigned"],
           ["Monthly fee", formatCurrency(student.monthlyFee ?? student.feeAmount)],
-          ["Pending fees", formatCurrency(student.pendingFees)],
-          ["Fee status", student.feeStatus || "Pending"],
+          ["Pending fees", formatCurrency(currentDueAmount)],
+          ["Fee status", currentFeeStatus === "paid" ? "Paid" : "Pending"],
         ].map(([label, value]) => (
           <div key={label} className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-3">
             <dt className="text-xs uppercase tracking-[0.14em] text-neutral-500">{label}</dt>
@@ -377,6 +367,8 @@ function OverviewPage({ data }) {
 
       <ProfileCard
         batch={data.batch}
+        currentDueAmount={data.currentDueAmount}
+        currentFeeStatus={data.currentFeeStatus}
         student={data.student}
         visibleStudentId={data.visibleStudentId}
       />
@@ -825,24 +817,25 @@ export default function StudentOverview({
     getLocalDateKey(),
     "not marked",
   );
-  const currentFeeRecord = feeRecords.find(
-    (record) => record.studentId === student.id && record.month === getLocalMonthKey(),
+  const currentFeeSummary = getStudentFeeSummaryForMonth(
+    student,
+    feeRecords,
+    getLocalMonthKey(),
   );
-  const profilePendingFees = Number(student.pendingFees ?? 0);
-  const currentFeeStatus =
-    currentFeeRecord?.status || (profilePendingFees > 0 ? "pending" : student.feeStatus || "pending");
-  const currentFeeAmount = Number(currentFeeRecord?.amount ?? student.monthlyFee ?? student.feeAmount ?? 0);
-  const currentAmountPaid = Number(
-    currentFeeRecord?.amountPaid ??
-      (currentFeeStatus === "paid" && profilePendingFees <= 0 ? currentFeeAmount : 0),
-  );
-  const currentDueAmount =
-    currentFeeRecord?.dueAmount ?? profilePendingFees ?? Math.max(currentFeeAmount - currentAmountPaid, 0);
+  const currentFeeRecord = currentFeeSummary.feeRecord;
+  const currentFeeStatus = currentFeeSummary.status;
+  const currentFeeAmount = currentFeeSummary.amount;
+  const currentAmountPaid = currentFeeSummary.amountPaid;
+  const currentDueAmount = currentFeeSummary.dueAmount;
   const ownAttendanceRecords = attendanceRecords
     .filter((record) => record.studentId === student.id)
     .sort((first, second) => String(second.date).localeCompare(String(first.date)));
   const ownFeeRecords = feeRecords
     .filter((record) => record.studentId === student.id)
+    .map((record) => ({
+      ...record,
+      ...getStudentMonthlyFeeSummary(student, record),
+    }))
     .sort((first, second) => String(second.month).localeCompare(String(first.month)));
   const ownEquipmentPurchases = equipmentPurchases
     .filter((record) => record.studentId === student.id)
