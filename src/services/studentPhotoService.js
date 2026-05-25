@@ -109,10 +109,16 @@ export async function uploadStudentPhoto(file, studentId) {
   const optimizedPhoto = await compressStudentPhoto(file);
   const photoRef = ref(storage, `student-photos/${normalizedStudentId}/${getSafeFileName(file)}`);
 
-  await uploadBytes(photoRef, optimizedPhoto, {
+  const uploadResult = await uploadBytes(photoRef, optimizedPhoto, {
     cacheControl: "public,max-age=31536000",
     contentType: "image/jpeg",
   });
 
-  return getDownloadURL(photoRef);
+  const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+  if (!downloadUrl) {
+    throw new Error("Student photo uploaded, but Firebase did not return a download URL.");
+  }
+
+  return downloadUrl;
 }

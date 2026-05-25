@@ -13,6 +13,7 @@ import {
   onSnapshot,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { auth, db, firebaseApiKey, isFirebaseConfigured } from "../config/firebase";
 import { ROLES } from "../constants/roles";
@@ -307,6 +308,13 @@ export async function createStudentAccount(account) {
       setDoc(doc(db, "users", uid), userPayload),
       setDoc(doc(db, "students", uid), studentPayload),
     ]);
+
+    if (photoUrl) {
+      await updateDoc(doc(db, "students", uid), {
+        photoUrl,
+        updatedAt: serverTimestamp(),
+      });
+    }
 
     return {
       uid,

@@ -51,6 +51,7 @@ import {
   saveAnnouncementRecord,
   saveEquipmentPurchaseRecord,
   saveFeeRecord,
+  saveStudentPhotoUrl,
   saveStudentRecord,
   subscribeToAttendanceRecords,
   subscribeToAnnouncements,
@@ -925,14 +926,20 @@ function App() {
       setIsSavingStudent(true);
 
       try {
+        const studentDocumentId = editingStudentId || normalizedStudent.id;
         const nextPhotoUrl = studentForm.photoFile
-          ? await uploadStudentPhoto(studentForm.photoFile, editingStudentId || normalizedStudent.id)
+          ? await uploadStudentPhoto(studentForm.photoFile, studentDocumentId)
           : normalizedStudent.photoUrl;
         await saveStudentRecord({
           ...normalizedStudent,
           photoUrl: nextPhotoUrl,
-          id: editingStudentId || normalizedStudent.id,
+          id: studentDocumentId,
         });
+
+        if (studentForm.photoFile) {
+          await saveStudentPhotoUrl(studentDocumentId, nextPhotoUrl);
+        }
+
         setStudentNotice(editingStudentId ? "Student updated." : "Student added.");
         resetStudentForm();
       } catch (error) {

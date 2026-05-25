@@ -622,6 +622,28 @@ export async function patchStudentRecord(studentId, patch) {
   });
 }
 
+export async function saveStudentPhotoUrl(studentId, photoUrl) {
+  requireFirestore();
+
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedPhotoUrl = String(photoUrl || "").trim();
+
+  if (!normalizedStudentId) {
+    throw new Error("Student document ID is required to save the photo URL.");
+  }
+
+  if (!normalizedPhotoUrl) {
+    throw new Error("Firebase Storage did not return a student photo URL.");
+  }
+
+  await updateDoc(doc(db, "students", normalizedStudentId), {
+    photoUrl: normalizedPhotoUrl,
+    updatedAt: serverTimestamp(),
+  });
+
+  return normalizedPhotoUrl;
+}
+
 export async function deleteStudentRecord(studentId) {
   requireFirestore();
 
