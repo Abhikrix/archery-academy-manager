@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AppShell from "./components/AppShell";
+import AttendanceStudentCard from "./components/AttendanceStudentCard";
 import DashboardCard from "./components/DashboardCard";
 import FeeStatusBadge from "./components/FeeStatusBadge";
 import LoginView from "./components/LoginView";
@@ -242,6 +243,30 @@ function getVisibleStudentId(student) {
   }
 
   return "Student ID not added";
+}
+
+function compareStudentsByStudentId(first, second) {
+  const firstStudentId = getVisibleStudentId(first);
+  const secondStudentId = getVisibleStudentId(second);
+  const firstMissing = firstStudentId === "Student ID not added";
+  const secondMissing = secondStudentId === "Student ID not added";
+
+  if (firstMissing !== secondMissing) {
+    return firstMissing ? 1 : -1;
+  }
+
+  const idComparison = firstStudentId.localeCompare(secondStudentId, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+  if (idComparison !== 0) {
+    return idComparison;
+  }
+
+  return String(first?.name || "").localeCompare(String(second?.name || ""), undefined, {
+    sensitivity: "base",
+  });
 }
 
 const roleViews = {
@@ -2253,6 +2278,10 @@ function AttendanceView({
   onMarkAll,
 }) {
   const summary = getAttendanceSummary(attendanceRecords, attendanceDate, students);
+  const sortedStudents = useMemo(
+    () => [...students].sort(compareStudentsByStudentId),
+    [students],
+  );
 
   return (
     <div className="space-y-6">
@@ -2293,18 +2322,18 @@ function AttendanceView({
 
       {isLoadingAttendance ? (
         <div className="surface p-4 text-sm text-neutral-400">Loading attendance...</div>
+      ) : sortedStudents.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">No students found.</div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {students.map((student) => {
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {sortedStudents.map((student) => {
             const status = getAttendanceStatusForDate(attendanceRecords, student.id, attendanceDate);
 
             return (
-              <StudentCard
+              <AttendanceStudentCard
                 key={student.id}
                 student={{ ...student, attendanceStatus: status }}
                 batch={getBatchById(batches, student.batchId)}
-                canManageAttendance
-                canManageStudents={false}
                 onAttendanceChange={onAttendanceChange}
               />
             );
