@@ -1,5 +1,13 @@
 export const MISSING_STUDENT_ID_LABEL = "Student ID not added";
 
+export function normalizeVisibleStudentId(value) {
+  return String(value || "").trim();
+}
+
+function getStudentIdKey(value) {
+  return normalizeVisibleStudentId(value).toLowerCase();
+}
+
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -10,8 +18,8 @@ function clampAmount(value, maxValue = Infinity) {
 }
 
 export function getVisibleStudentId(student) {
-  const studentId = String(student?.studentId || "").trim();
-  const documentId = String(student?.id || "").trim();
+  const studentId = normalizeVisibleStudentId(student?.studentId);
+  const documentId = normalizeVisibleStudentId(student?.id);
 
   if (studentId && studentId !== documentId) {
     return studentId;
@@ -22,6 +30,35 @@ export function getVisibleStudentId(student) {
   }
 
   return MISSING_STUDENT_ID_LABEL;
+}
+
+export function getEditableStudentId(student) {
+  const visibleStudentId = getVisibleStudentId(student);
+  return visibleStudentId === MISSING_STUDENT_ID_LABEL ? "" : visibleStudentId;
+}
+
+export function findStudentByVisibleStudentId(students, studentId, ignoredStudentDocumentId = "") {
+  const studentIdKey = getStudentIdKey(studentId);
+  const ignoredDocumentId = normalizeVisibleStudentId(ignoredStudentDocumentId);
+
+  if (!studentIdKey) {
+    return null;
+  }
+
+  return (
+    students.find((student) => {
+      if (normalizeVisibleStudentId(student?.id) === ignoredDocumentId) {
+        return false;
+      }
+
+      const visibleStudentId = getVisibleStudentId(student);
+
+      return (
+        visibleStudentId !== MISSING_STUDENT_ID_LABEL &&
+        getStudentIdKey(visibleStudentId) === studentIdKey
+      );
+    }) || null
+  );
 }
 
 export function compareStudentsByVisibleId(first, second) {

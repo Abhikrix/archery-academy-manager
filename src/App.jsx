@@ -75,9 +75,12 @@ import {
 } from "./utils/formatters";
 import {
   compareStudentsByVisibleId,
+  findStudentByVisibleStudentId,
+  getEditableStudentId,
   getStudentFeeSummaryForMonth,
   getStudentMonthlyFeeSummary,
   getVisibleStudentId,
+  normalizeVisibleStudentId,
   sortStudentsByVisibleId,
 } from "./utils/studentRecords";
 import { getRoleHomePath } from "./utils/roleRoutes";
@@ -841,6 +844,7 @@ function App() {
     setEditingStudentId(student.id);
     setStudentForm({
       ...student,
+      studentId: getEditableStudentId(student),
       feeAmount: String(student.feeAmount),
       photoFile: null,
       photoPreviewUrl: "",
@@ -874,8 +878,35 @@ function App() {
     setStudentError("");
     setStudentNotice("");
 
+    const studentDocumentId = editingStudentId || studentForm.id || "";
+    const visibleStudentId = normalizeVisibleStudentId(studentForm.studentId);
+    const duplicateStudent = findStudentByVisibleStudentId(
+      students,
+      visibleStudentId,
+      studentDocumentId,
+    );
+
+    if (!visibleStudentId) {
+      setStudentError("Student ID is required.");
+      return;
+    }
+
+    if (duplicateStudent) {
+      setStudentError(
+        `${visibleStudentId} is already assigned to ${duplicateStudent.name || "another student"}.`,
+      );
+      return;
+    }
+
+    if (usesFirestoreStudents && !studentDocumentId) {
+      setStudentError("Open an existing student before changing the student ID.");
+      return;
+    }
+
     const normalizedStudent = createStudentRecord({
       ...studentForm,
+      id: studentDocumentId || studentForm.id,
+      studentId: visibleStudentId,
       feeAmount: Number(studentForm.feeAmount),
       attendanceRate: Number(studentForm.attendanceRate),
     });
@@ -885,16 +916,10 @@ function App() {
       return;
     }
 
-    if (!normalizedStudent.studentId) {
-      setStudentError("Student ID is required.");
-      return;
-    }
-
     if (usesFirestoreStudents) {
       setIsSavingStudent(true);
 
       try {
-        const studentDocumentId = editingStudentId || normalizedStudent.id;
         const nextPhotoUrl = studentForm.photoFile
           ? await uploadStudentPhoto(studentForm.photoFile, studentDocumentId)
           : normalizedStudent.photoUrl;
@@ -906,6 +931,21 @@ function App() {
 
         if (studentForm.photoFile) {
           await saveStudentPhotoUrl(studentDocumentId, nextPhotoUrl);
+        }
+
+        const linkedUserProfile = userProfiles.find(
+          (userProfile) =>
+            userProfile.uid === studentDocumentId && userProfile.role === ROLES.STUDENT,
+        );
+
+        if (
+          linkedUserProfile &&
+          normalizeVisibleStudentId(linkedUserProfile.studentId) !== normalizedStudent.studentId
+        ) {
+          await saveUserProfile({
+            ...linkedUserProfile,
+            studentId: normalizedStudent.studentId,
+          });
         }
 
         setStudentNotice(editingStudentId ? "Student updated." : "Student added.");
@@ -922,8 +962,16 @@ function App() {
       setStudents((currentStudents) =>
         updateStudentRecord(currentStudents, editingStudentId, {
           ...normalizedStudent,
+          id: studentDocumentId || normalizedStudent.id,
           photoUrl: studentForm.photoPreviewUrl || normalizedStudent.photoUrl,
         }),
+      );
+      setUserProfiles((currentProfiles) =>
+        currentProfiles.map((userProfile) =>
+          userProfile.uid === editingStudentId && userProfile.role === ROLES.STUDENT
+            ? { ...userProfile, studentId: normalizedStudent.studentId }
+            : userProfile,
+        ),
       );
       setStudentNotice("Student updated locally.");
     } else {
@@ -992,10 +1040,29 @@ function App() {
     event.preventDefault();
     setStudentAccountError("");
     setStudentAccountNotice("");
+
+    const visibleStudentId = normalizeVisibleStudentId(studentAccountForm.studentId);
+    const duplicateStudent = findStudentByVisibleStudentId(students, visibleStudentId);
+
+    if (!visibleStudentId) {
+      setStudentAccountError("Student ID is required.");
+      return;
+    }
+
+    if (duplicateStudent) {
+      setStudentAccountError(
+        `${visibleStudentId} is already assigned to ${duplicateStudent.name || "another student"}.`,
+      );
+      return;
+    }
+
     setIsCreatingStudentAccount(true);
 
     try {
-      const createdAccount = await createStudentAccount(studentAccountForm);
+      const createdAccount = await createStudentAccount({
+        ...studentAccountForm,
+        studentId: visibleStudentId,
+      });
       setStudentAccountNotice(
         `${createdAccount.name} student account created. UID: ${createdAccount.uid}`,
       );
