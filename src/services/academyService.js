@@ -1,8 +1,11 @@
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -81,6 +84,21 @@ function normalizeAnnouncementSnapshot(snapshot) {
   });
 }
 
+function normalizeAuditLogSnapshot(snapshot) {
+  const data = snapshot.data();
+
+  return {
+    id: snapshot.id,
+    actionType: String(data.actionType || "").trim(),
+    actorName: String(data.actorName || "").trim(),
+    actorRole: String(data.actorRole || "").trim(),
+    affectedStudentId: String(data.affectedStudentId || "").trim(),
+    affectedStudentName: String(data.affectedStudentName || "").trim(),
+    details: String(data.details || "").trim(),
+    timestamp: data.timestamp || null,
+  };
+}
+
 function getAttendanceRecordId(studentId, date) {
   return `${studentId}_${date}`.replace(/\//g, "-");
 }
@@ -148,6 +166,12 @@ function sortAnnouncements(records) {
 
     return getTimestampMillis(second.createdAt) - getTimestampMillis(first.createdAt);
   });
+}
+
+function sortAuditLogs(records) {
+  return [...records].sort(
+    (first, second) => getTimestampMillis(second.timestamp) - getTimestampMillis(first.timestamp),
+  );
 }
 
 export function getInitialAcademySnapshot() {
@@ -307,6 +331,18 @@ export function createAnnouncementRecord(record) {
   };
 }
 
+export function createAuditLogRecord(record) {
+  return {
+    actionType: String(record.actionType || "").trim(),
+    actorName: String(record.actorName || "").trim(),
+    actorRole: String(record.actorRole || "").trim(),
+    affectedStudentId: String(record.affectedStudentId || "").trim(),
+    affectedStudentName: String(record.affectedStudentName || "").trim(),
+    details: String(record.details || "").trim(),
+    timestamp: record.timestamp || null,
+  };
+}
+
 export function upsertAnnouncementRecord(records, nextRecord) {
   const normalizedRecord = createAnnouncementRecord(nextRecord);
 
@@ -452,6 +488,18 @@ export function subscribeToAnnouncements(onRecords, onError) {
   );
 }
 
+export function subscribeToAuditLogs(onRecords, onError) {
+  requireFirestore();
+
+  return onSnapshot(
+    query(collection(db, "auditLogs"), orderBy("timestamp", "desc"), limit(150)),
+    (snapshot) => {
+      onRecords(sortAuditLogs(snapshot.docs.map(normalizeAuditLogSnapshot)));
+    },
+    onError,
+  );
+}
+
 export async function saveAttendanceRecord(record) {
   requireFirestore();
 
@@ -577,6 +625,40 @@ export async function saveAnnouncementRecord(record) {
     pinned: normalizedRecord.pinned,
     createdAt: normalizedRecord.createdAt || serverTimestamp(),
     createdBy: normalizedRecord.createdBy,
+  });
+
+  return normalizedRecord;
+}
+
+export async function saveAuditLogEntry(record) {
+  requireFirestore();
+
+  const normalizedRecord = createAuditLogRecord(record);
+
+  if (!normalizedRecord.actionType) {
+    throw new Error("Audit action type is required.");
+  }
+
+  if (!normalizedRecord.actorName) {
+    throw new Error("Audit actor name is required.");
+  }
+
+  if (!normalizedRecord.actorRole) {
+    throw new Error("Audit actor role is required.");
+  }
+
+  if (!normalizedRecord.details) {
+    throw new Error("Audit details are required.");
+  }
+
+  await addDoc(collection(db, "auditLogs"), {
+    actionType: normalizedRecord.actionType,
+    actorName: normalizedRecord.actorName,
+    actorRole: normalizedRecord.actorRole,
+    affectedStudentId: normalizedRecord.affectedStudentId,
+    affectedStudentName: normalizedRecord.affectedStudentName,
+    details: normalizedRecord.details,
+    timestamp: serverTimestamp(),
   });
 
   return normalizedRecord;

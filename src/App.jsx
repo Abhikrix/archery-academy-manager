@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   CalendarDays,
   CalendarX,
@@ -53,7 +54,9 @@ import {
   saveFeeRecord,
   saveStudentPhotoUrl,
   saveStudentRecord,
+  saveAuditLogEntry,
   subscribeToAttendanceRecords,
+  subscribeToAuditLogs,
   subscribeToAnnouncements,
   subscribeToEquipmentPurchases,
   subscribeToFeeRecords,
@@ -285,6 +288,7 @@ const roleViews = {
     "announcements",
     "students",
     "reports",
+    "audit",
     "users",
     "settings",
   ],
@@ -308,6 +312,7 @@ function App() {
     createInitialAttendanceRecords(snapshot.students),
   );
   const [announcements, setAnnouncements] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [feeRecords, setFeeRecords] = useState(() => createInitialFeeRecords(snapshot.students));
   const [equipmentPurchases, setEquipmentPurchases] = useState([]);
   const [attendanceDate, setAttendanceDate] = useState(getLocalDateKey);
@@ -325,6 +330,7 @@ function App() {
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
   const [isLoadingFees, setIsLoadingFees] = useState(false);
   const [isLoadingEquipment, setIsLoadingEquipment] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -336,6 +342,7 @@ function App() {
   const [studentError, setStudentError] = useState("");
   const [attendanceError, setAttendanceError] = useState("");
   const [announcementError, setAnnouncementError] = useState("");
+  const [auditError, setAuditError] = useState("");
   const [feeError, setFeeError] = useState("");
   const [equipmentError, setEquipmentError] = useState("");
   const [userError, setUserError] = useState("");
@@ -348,6 +355,37 @@ function App() {
   const [userNotice, setUserNotice] = useState("");
   const usesFirestoreStudents = Boolean(isFirebaseConfigured && profile);
   const profileStudentId = profile?.role === ROLES.STUDENT ? getProfileStudentId(profile) : "";
+
+  function getAuditActor() {
+    return {
+      actorName: profile?.name || profile?.email || profile?.uid || "Academy user",
+      actorRole: profile?.role || "",
+    };
+  }
+
+  function getStudentAuditFields(student) {
+    return {
+      affectedStudentId: student ? getVisibleStudentId(student) : "",
+      affectedStudentName: student?.name || "",
+    };
+  }
+
+  function logAuditAction(entry) {
+    if (!usesFirestoreStudents || !profile || profile.role === ROLES.STUDENT) {
+      return;
+    }
+
+    void saveAuditLogEntry({
+      ...getAuditActor(),
+      affectedStudentId: "",
+      affectedStudentName: "",
+      ...entry,
+    }).catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn("[Audit log]", error);
+      }
+    });
+  }
 
   useEffect(() => {
     if (!usesFirestoreStudents) {
@@ -412,6 +450,29 @@ function App() {
       },
     );
   }, [profile, usesFirestoreStudents]);
+
+  useEffect(() => {
+    if (!usesFirestoreStudents || profile.role !== ROLES.ADMIN) {
+      setAuditLogs([]);
+      setAuditError("");
+      setIsLoadingAuditLogs(false);
+      return undefined;
+    }
+
+    setIsLoadingAuditLogs(true);
+
+    return subscribeToAuditLogs(
+      (nextLogs) => {
+        setAuditLogs(nextLogs);
+        setAuditError("");
+        setIsLoadingAuditLogs(false);
+      },
+      (error) => {
+        setAuditError(error.message);
+        setIsLoadingAuditLogs(false);
+      },
+    );
+  }, [profile?.role, usesFirestoreStudents]);
 
   useEffect(() => {
     if (!usesFirestoreStudents) {
@@ -520,6 +581,7 @@ function App() {
 
   async function updateAttendance(studentId, attendanceStatus) {
     setAttendanceError("");
+    const student = students.find((record) => record.id === studentId);
     const nextRecord = createAttendanceRecord({
       studentId,
       date: attendanceDate,
@@ -529,6 +591,13 @@ function App() {
     if (usesFirestoreStudents) {
       try {
         await saveAttendanceRecord(nextRecord);
+        logAuditAction({
+          actionType: "attendance.marked",
+          ...getStudentAuditFields(student),
+          details: `${student?.name || studentId} marked ${attendanceStatus} for ${formatDate(
+            attendanceDate,
+          )}.`,
+        });
       } catch (error) {
         setAttendanceError(error.message);
       }
@@ -559,6 +628,12 @@ function App() {
     if (usesFirestoreStudents) {
       try {
         await Promise.all(nextRecords.map(saveAttendanceRecord));
+        logAuditAction({
+          actionType: "attendance.mark_all",
+          details: `Marked ${nextRecords.length} students ${attendanceStatus} for ${formatDate(
+            attendanceDate,
+          )}.`,
+        });
       } catch (error) {
         setAttendanceError(error.message);
       }
@@ -601,6 +676,15 @@ function App() {
     if (usesFirestoreStudents) {
       try {
         await saveFeeRecord(nextRecord);
+        logAuditAction({
+          actionType: "fee.updated",
+          ...getStudentAuditFields(student),
+          details: `${nextRecord.studentName} fee updated for ${formatMonth(
+            feeMonth,
+          )}: ${formatCurrency(nextRecord.amountPaid)} paid, ${formatCurrency(
+            nextRecord.dueAmount,
+          )} due.`,
+        });
         setFeeNotice(
           nextRecord.status === "paid"
             ? `${nextRecord.studentName} marked paid for ${formatMonth(feeMonth)}.`
@@ -666,6 +750,12 @@ function App() {
     if (usesFirestoreStudents) {
       try {
         await saveAnnouncementRecord(nextAnnouncement);
+        logAuditAction({
+          actionType: editingAnnouncementId ? "announcement.updated" : "announcement.created",
+          details: `${editingAnnouncementId ? "Updated" : "Created"} announcement "${
+            nextAnnouncement.title
+          }" (${nextAnnouncement.category}).`,
+        });
         setAnnouncementNotice(
           editingAnnouncementId ? "Announcement updated." : "Announcement created.",
         );
@@ -694,10 +784,15 @@ function App() {
   async function deleteAnnouncement(announcementId) {
     setAnnouncementError("");
     setAnnouncementNotice("");
+    const announcement = announcements.find((record) => record.id === announcementId);
 
     if (usesFirestoreStudents) {
       try {
         await deleteAnnouncementRecord(announcementId);
+        logAuditAction({
+          actionType: "announcement.deleted",
+          details: `Deleted announcement "${announcement?.title || announcementId}".`,
+        });
         setAnnouncementNotice("Announcement deleted.");
 
         if (editingAnnouncementId === announcementId) {
@@ -784,6 +879,15 @@ function App() {
     if (usesFirestoreStudents) {
       try {
         await saveEquipmentPurchaseRecord(nextPurchase);
+        logAuditAction({
+          actionType: editingEquipmentPurchaseId ? "equipment.updated" : "equipment.created",
+          ...getStudentAuditFields(student),
+          details: `${editingEquipmentPurchaseId ? "Updated" : "Created"} equipment purchase "${
+            nextPurchase.itemName
+          }" for ${student.name}: ${formatCurrency(nextPurchase.paidAmount)} paid, ${formatCurrency(
+            nextPurchase.dueAmount,
+          )} due.`,
+        });
         setEquipmentNotice(
           `${nextPurchase.itemName} saved for ${student.name}. ${formatCurrency(
             nextPurchase.dueAmount,
@@ -822,10 +926,16 @@ function App() {
       paidAmount: purchase.totalPrice,
       updatedBy: profile?.name || profile?.email || profile?.uid || "Local user",
     });
+    const student = students.find((record) => record.id === purchase.studentId);
 
     if (usesFirestoreStudents) {
       try {
         await saveEquipmentPurchaseRecord(nextPurchase);
+        logAuditAction({
+          actionType: "equipment.payment_received",
+          ...getStudentAuditFields(student),
+          details: `${purchase.itemName} marked fully paid for ${purchase.studentName}.`,
+        });
         setEquipmentNotice(`${purchase.itemName} marked paid for ${purchase.studentName}.`);
       } catch (error) {
         setEquipmentError(error.message);
@@ -920,6 +1030,7 @@ function App() {
       setIsSavingStudent(true);
 
       try {
+        const previousStudent = students.find((student) => student.id === studentDocumentId);
         const nextPhotoUrl = studentForm.photoFile
           ? await uploadStudentPhoto(studentForm.photoFile, studentDocumentId)
           : normalizedStudent.photoUrl;
@@ -947,6 +1058,16 @@ function App() {
             studentId: normalizedStudent.studentId,
           });
         }
+
+        logAuditAction({
+          actionType: editingStudentId ? "student.updated" : "student.created",
+          ...getStudentAuditFields(normalizedStudent),
+          details: editingStudentId
+            ? `Updated student ${normalizedStudent.name}. Student ID ${
+                previousStudent ? getVisibleStudentId(previousStudent) : "not set"
+              } -> ${normalizedStudent.studentId}.`
+            : `Created student ${normalizedStudent.name} (${normalizedStudent.studentId}).`,
+        });
 
         setStudentNotice(editingStudentId ? "Student updated." : "Student added.");
         resetStudentForm();
@@ -991,10 +1112,16 @@ function App() {
   async function deleteStudent(studentId) {
     setStudentError("");
     setStudentNotice("");
+    const student = students.find((record) => record.id === studentId);
 
     if (usesFirestoreStudents) {
       try {
         await deleteStudentRecord(studentId);
+        logAuditAction({
+          actionType: "student.deleted",
+          ...getStudentAuditFields(student),
+          details: `Deleted student ${student?.name || studentId}.`,
+        });
         setStudentNotice("Student deleted.");
 
         if (editingStudentId === studentId) {
@@ -1014,6 +1141,7 @@ function App() {
     event.preventDefault();
     setUserError("");
     setUserNotice("");
+    const isEditingUser = Boolean(editingUserId);
 
     if (editingUserId === profile?.uid && userForm.role !== ROLES.ADMIN) {
       setUserError("You cannot remove your own admin access.");
@@ -1023,9 +1151,17 @@ function App() {
     setIsSavingUser(true);
 
     try {
-      await saveUserProfile({
+      const savedProfile = await saveUserProfile({
         ...userForm,
         uid: editingUserId || userForm.uid,
+      });
+      logAuditAction({
+        actionType: isEditingUser ? "user.updated" : "user.created",
+        affectedStudentId: savedProfile.role === ROLES.STUDENT ? savedProfile.studentId : "",
+        affectedStudentName: "",
+        details: `${isEditingUser ? "Updated" : "Created"} ${savedProfile.role} user ${
+          savedProfile.name
+        }.`,
       });
       setUserNotice(editingUserId ? "User profile updated." : "User profile added.");
       resetUserForm();
@@ -1063,6 +1199,12 @@ function App() {
         ...studentAccountForm,
         studentId: visibleStudentId,
       });
+      logAuditAction({
+        actionType: "student.created",
+        affectedStudentId: visibleStudentId,
+        affectedStudentName: studentAccountForm.name,
+        details: `Created student account for ${studentAccountForm.name} (${visibleStudentId}).`,
+      });
       setStudentAccountNotice(
         `${createdAccount.name} student account created. UID: ${createdAccount.uid}`,
       );
@@ -1078,6 +1220,7 @@ function App() {
   async function deleteUser(uid) {
     setUserError("");
     setUserNotice("");
+    const userProfile = userProfiles.find((user) => user.uid === uid);
 
     if (uid === profile?.uid) {
       setUserError("You cannot delete your own user profile.");
@@ -1086,6 +1229,14 @@ function App() {
 
     try {
       await deleteUserProfile(uid);
+      logAuditAction({
+        actionType: "user.deleted",
+        affectedStudentId: userProfile?.role === ROLES.STUDENT ? userProfile.studentId : "",
+        affectedStudentName: "",
+        details: `Deleted ${userProfile?.role || "user"} profile ${
+          userProfile?.name || uid
+        }.`,
+      });
       setUserNotice("User profile deleted.");
 
       if (editingUserId === uid) {
@@ -1113,6 +1264,8 @@ function App() {
               announcementError={announcementError}
               announcementForm={announcementForm}
               announcementNotice={announcementNotice}
+              auditError={auditError}
+              auditLogs={auditLogs}
               attendanceDate={attendanceDate}
               attendanceError={attendanceError}
               attendanceRecords={attendanceRecords}
@@ -1134,6 +1287,7 @@ function App() {
               editingUserId={editingUserId}
               isLoadingAttendance={isLoadingAttendance}
               isLoadingAnnouncements={isLoadingAnnouncements}
+              isLoadingAuditLogs={isLoadingAuditLogs}
               isLoadingEquipment={isLoadingEquipment}
               isLoadingFees={isLoadingFees}
               isLoadingStudents={isLoadingStudents}
@@ -1309,6 +1463,8 @@ function ManagementPortal({
   announcementError,
   announcementForm,
   announcementNotice,
+  auditError,
+  auditLogs,
   attendanceDate,
   attendanceError,
   attendanceRecords,
@@ -1330,6 +1486,7 @@ function ManagementPortal({
   editingUserId,
   isLoadingAttendance,
   isLoadingAnnouncements,
+  isLoadingAuditLogs,
   isLoadingEquipment,
   isLoadingFees,
   isLoadingStudents,
@@ -1530,6 +1687,13 @@ function ManagementPortal({
           students={students}
         />
       )}
+      {activeView === "audit" && permissions.canViewAuditLogs && (
+        <AuditLogsView
+          auditError={auditError}
+          auditLogs={auditLogs}
+          isLoadingAuditLogs={isLoadingAuditLogs}
+        />
+      )}
       {activeView === "users" && permissions.canManageUsers && (
         <UsersManagementView
           currentUserId={profile.uid}
@@ -1678,6 +1842,10 @@ function buildNavigation(role, permissions) {
 
   if (permissions.canViewReports) {
     items.push({ id: "reports", label: "Reports" });
+  }
+
+  if (permissions.canViewAuditLogs) {
+    items.push({ id: "audit", label: "Audit Logs" });
   }
 
   if (permissions.canManageUsers) {
@@ -4364,6 +4532,35 @@ function BarChart({ rows, valueKey, labelKey, formatter = (value) => value }) {
   );
 }
 
+function getAuditActionLabel(actionType) {
+  return String(actionType || "activity")
+    .split(".")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getAuditTimestampMillis(value) {
+  const date = getDateFromTimestamp(value);
+  return date ? date.getTime() : 0;
+}
+
+function formatAuditTimestamp(value) {
+  const date = getDateFromTimestamp(value);
+
+  if (!date) {
+    return "Pending timestamp";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function ReportsView({ attendanceRecords, batches, feeRecords, role, students }) {
   const [reportMonth, setReportMonth] = useState(getLocalMonthKey);
   const [reportNotice, setReportNotice] = useState("");
@@ -4741,6 +4938,140 @@ function ReportsView({ attendanceRecords, batches, feeRecords, role, students })
   );
 }
 
+function AuditLogsView({ auditError = "", auditLogs = [], isLoadingAuditLogs = false }) {
+  const [actionFilter, setActionFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState("latest");
+  const actionTypes = useMemo(
+    () => Array.from(new Set(auditLogs.map((log) => log.actionType).filter(Boolean))).sort(),
+    [auditLogs],
+  );
+  const visibleLogs = useMemo(() => {
+    const filteredLogs =
+      actionFilter === "all"
+        ? auditLogs
+        : auditLogs.filter((log) => log.actionType === actionFilter);
+    const direction = sortOrder === "oldest" ? 1 : -1;
+
+    return [...filteredLogs].sort(
+      (first, second) =>
+        direction *
+        (getAuditTimestampMillis(first.timestamp) - getAuditTimestampMillis(second.timestamp)),
+    );
+  }, [actionFilter, auditLogs, sortOrder]);
+
+  return (
+    <div className="space-y-6">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="section-title">Audit logs</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Admin activity feed</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
+            Latest-first records of attendance, fees, student changes, equipment, announcements,
+            and user actions.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Action</span>
+            <select
+              className="field w-full"
+              value={actionFilter}
+              onChange={(event) => setActionFilter(event.target.value)}
+            >
+              <option value="all">All actions</option>
+              {actionTypes.map((actionType) => (
+                <option key={actionType} value={actionType}>
+                  {getAuditActionLabel(actionType)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-neutral-400">Sort</span>
+            <select
+              className="field w-full"
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value)}
+            >
+              <option value="latest">Latest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <DashboardCard
+          icon={Activity}
+          label="Logged actions"
+          value={auditLogs.length}
+          helper="Latest 150 entries"
+        />
+        <DashboardCard
+          icon={Users}
+          label="Actors"
+          value={new Set(auditLogs.map((log) => log.actorName).filter(Boolean)).size}
+          helper="Admins and coaches"
+        />
+        <DashboardCard
+          icon={ClipboardCheck}
+          label="Shown"
+          value={visibleLogs.length}
+          helper={sortOrder === "latest" ? "Latest first" : "Oldest first"}
+        />
+      </div>
+
+      {auditError && (
+        <p className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+          {auditError}
+        </p>
+      )}
+
+      {isLoadingAuditLogs ? (
+        <div className="surface p-4 text-sm text-neutral-400">Loading audit logs...</div>
+      ) : visibleLogs.length === 0 ? (
+        <div className="surface p-4 text-sm text-neutral-400">
+          No audit logs match the current filters.
+        </div>
+      ) : (
+        <section className="space-y-3">
+          {visibleLogs.map((log) => (
+            <article key={log.id} className="surface min-w-0 overflow-hidden p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-academy-gold/35 bg-academy-gold/10 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.1em] text-academy-gold">
+                      {getAuditActionLabel(log.actionType)}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      {formatAuditTimestamp(log.timestamp)}
+                    </span>
+                  </div>
+                  <p className="mt-3 break-words text-sm leading-6 text-neutral-200">
+                    {log.details}
+                  </p>
+                </div>
+                <div className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-3 text-sm sm:w-64">
+                  <p className="break-words font-medium text-white">{log.actorName}</p>
+                  <p className="mt-1 capitalize text-neutral-500">{log.actorRole || "unknown"}</p>
+                  {(log.affectedStudentId || log.affectedStudentName) && (
+                    <p className="mt-3 break-words text-neutral-300">
+                      {log.affectedStudentName || "Student"}{" "}
+                      {log.affectedStudentId && (
+                        <span className="text-academy-gold">({log.affectedStudentId})</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
 function SettingsView() {
   const settingsCards = [
     {
@@ -4758,6 +5089,7 @@ function SettingsView() {
         ["Attendance", "attendance"],
         ["Fees", "fees"],
         ["Equipment", "equipmentPurchases"],
+        ["Audit logs", "auditLogs"],
       ],
     },
     {

@@ -305,6 +305,35 @@ service cloud.firestore {
         && request.resource.data.createdBy is string;
     }
 
+    function validAuditLogRecord() {
+      return request.resource.data.keys().hasAll([
+          'actionType',
+          'actorName',
+          'actorRole',
+          'affectedStudentId',
+          'affectedStudentName',
+          'details',
+          'timestamp'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'actionType',
+          'actorName',
+          'actorRole',
+          'affectedStudentId',
+          'affectedStudentName',
+          'details',
+          'timestamp'
+        ])
+        && request.resource.data.actionType is string
+        && request.resource.data.actorName is string
+        && request.resource.data.actorRole in ['admin', 'coach']
+        && request.resource.data.actorRole == currentUserProfile().role
+        && request.resource.data.affectedStudentId is string
+        && request.resource.data.affectedStudentName is string
+        && request.resource.data.details is string
+        && request.resource.data.timestamp == request.time;
+    }
+
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
 
@@ -394,6 +423,15 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{auditLogId} {
+      allow read: if isAdmin();
+
+      allow create: if isStaff()
+        && validAuditLogRecord();
+
+      allow update, delete: if false;
     }
 
     match /{document=**} {
